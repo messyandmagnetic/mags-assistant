@@ -1,35 +1,40 @@
 export async function POST(req) {
-  const body = await req.json();
-  const command = body.command;
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
   try {
-    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const { message } = await req.json();
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
         model: 'gpt-4',
         messages: [
-          { role: 'system', content: 'You are a helpful assistant who translates user commands into structured workflows.' },
-          { role: 'user', content: command }
-        ]
-      })
+          {
+            role: 'system',
+            content: 'You are Mags, a powerful assistant designed to update Stripe product listings automatically based on user commands. Be direct, helpful, and accurate.',
+          },
+          {
+            role: 'user',
+            content: message,
+          },
+        ],
+      }),
     });
 
-    const data = await openaiResponse.json();
-    const content = data.choices?.[0]?.message?.content;
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content || 'No reply found.';
 
-    return new Response(JSON.stringify({ result: content }), {
+    return new Response(JSON.stringify({ reply }), {
+      headers: { 'Content-Type': 'application/json' },
       status: 200,
-      headers: { 'Content-Type': 'application/json' }
     });
-
-  } catch (err) {
-    return new Response(JSON.stringify({ error: 'Something went wrong', details: err }), {
-      status: 500
+  } catch (error) {
+    console.error('Error:', error);
+    return new Response(JSON.stringify({ error: 'Something went wrong.' }), {
+      headers: { 'Content-Type': 'application/json' },
+      status: 500,
     });
   }
 }
