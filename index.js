@@ -1,2 +1,11 @@
-// Entry point for Mags Assistant (Node.js version placeholder)
-console.log('Mags is alive. Connect her to your command center next!');
+const express = require('express');
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get('/', (req, res) => {
+  res.send('🌟 Mags is alive and connected. Ready for your first command.');
+});
+
+app.listen(PORT, () => {
+  console.log(`Mags is running on port ${PORT}`);
+});
