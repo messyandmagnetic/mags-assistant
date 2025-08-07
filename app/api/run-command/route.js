@@ -1,30 +1,26 @@
 export async function POST(req) {
-  try {
-    const { message } = await req.json();
+  const body = await req.json();
+  const command = body.command;
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+  try {
+    const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         model: 'gpt-4',
         messages: [
-          {
-            role: 'system',
-            content: 'You are Mags, a powerful assistant designed to update Stripe product listings automatically based on user commands. Be direct, helpful, and accurate.',
-          },
-          {
-            role: 'user',
-            content: message,
-          },
-        ],
-      }),
+          { role: 'system', content: 'You are Mags, a powerful assistant designed to update Stripe product listings automatically.' },
+          { role: 'user', content: command }
+        ]
+      })
     });
 
-    const data = await response.json();
-    const reply = data.choices?.[0]?.message?.content || 'No reply found.';
+    const data = await openaiResponse.json();
+    const reply = data.choices?.[0]?.message?.content || "No reply found.";
 
     return new Response(JSON.stringify({ reply }), {
       headers: { 'Content-Type': 'application/json' },
