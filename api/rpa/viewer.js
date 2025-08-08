@@ -51,3 +51,53 @@ export default async function handler(req, res) {
     return res.status(500).json({ ok: false, error: String(e) });
   }
 }
+// --- Mags Live Viewer mini UI ---
+document.addEventListener("DOMContentLoaded", () => {
+  // Create a simple floating bar
+  const bar = document.createElement("div");
+  bar.id = "mags-live-bar";
+  bar.style.cssText = `
+    position: fixed; right: 16px; bottom: 16px; z-index: 9999;
+    display: flex; gap: 8px; align-items: center; 
+    background: rgba(0,0,0,.6); color: #fff; padding: 10px 12px; border-radius: 10px;
+    backdrop-filter: blur(4px); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  `;
+
+  const openBtn = document.createElement("button");
+  openBtn.textContent = "Watch Mags";
+  openBtn.style.cssText = "padding:6px 10px;border-radius:8px;border:none;cursor:pointer;background:#10b981;color:#fff;";
+  openBtn.addEventListener("click", async () => {
+    try {
+      // redirect=1 so you don’t have to copy any URL
+      window.open("/api/rpa/viewer?redirect=1", "_blank");
+    } catch (e) {
+      alert("Couldn’t open viewer: " + e.message);
+    }
+  });
+
+  const urlInput = document.createElement("input");
+  urlInput.type = "text";
+  urlInput.placeholder = "https://dashboard.stripe.com/login";
+  urlInput.style.cssText = "width:320px;padding:6px 8px;border-radius:8px;border:1px solid #333;background:#111;color:#fff;";
+
+  const openWithUrlBtn = document.createElement("button");
+  openWithUrlBtn.textContent = "Watch + Open URL";
+  openWithUrlBtn.style.cssText = "padding:6px 10px;border-radius:8px;border:none;cursor:pointer;background:#3b82f6;color:#fff;";
+  openWithUrlBtn.addEventListener("click", async () => {
+    let u = urlInput.value.trim();
+    if (!u) u = "https://dashboard.stripe.com/login";
+    // Use the session starter that supports ?url= to preload the page
+    const r = await fetch(`/api/rpa/start?ttl=45000&url=${encodeURIComponent(u)}`);
+    const data = await r.json();
+    if (!data.ok) {
+      alert(data.error || "Could not start session");
+      return;
+    }
+    window.open(data.viewerUrl, "_blank");
+  });
+
+  bar.appendChild(openBtn);
+  bar.appendChild(urlInput);
+  bar.appendChild(openWithUrlBtn);
+  document.body.appendChild(bar);
+});
