@@ -1,0 +1,37 @@
+// /api/rpa/start-view.js
+export default async function handler(req, res) {
+  try {
+    const token = process.env.BROWSERLESS_API_KEY || process.env.BROWSERLESS_TOKEN;
+    const base  = process.env.BROWSERLESS_BASE || "https://production-sfo.browserless.io";
+    if (!token) return res.status(500).send("Missing BROWSERLESS token");
+
+    const ttlMs = Math.min(Number(req.query.ttl || 15000), 60000);
+    const urlParam = (req.query.url || "").toString().trim();
+
+    const args = ["--no-sandbox","--disable-dev-shm-usage"];
+    if (urlParam) args.push(`--app=${urlParam}`);
+
+    // Your plan accepts query-string token auth
+    const r = await fetch(`${base}/session?token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ttl: ttlMs, headless: false, stealth: true, args })
+    });
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).send(text);
+
+    const session = JSON.parse(text); // { connect: "wss://.../session/connect/...?...token=..." }
+    const u = new URL(session.connect);
+    const wsParam = `${u.host}${u.pathname}${u.search}`; // includes ?token= already
+
+    const viewer = new URL(`${base}/devtools/inspector.html`);
+    viewer.searchParams.set("ws", wsParam);
+    if (!viewer.searchParams.has("token")) viewer.searchParams.set("token", token);
+
+    // 302 redirect straight to the viewer (no JSON to copy)
+    res.writeHead(302, { Location: viewer.toString() });
+    return res.end();
+  } catch (e) {
+    return res.status(500).send(String(e));
+  }
+}
