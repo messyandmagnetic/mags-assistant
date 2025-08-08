@@ -17,14 +17,13 @@ document.addEventListener("DOMContentLoaded", function () {
     messages.appendChild(responseElem);
 
     try {
-      const res = await fetch("/app/api/run-command", {
+      const res = await fetch("/api/run-command", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ command: userCommand }),
       });
-
       const data = await res.json();
-      responseElem.textContent = `✨ Mags: ${data.result || "Done!"}`;
+      responseElem.textContent = data.error ? `❌ Error: ${data.error}` : `✨ Mags: ${data.message}`;
     } catch (error) {
       responseElem.textContent = `❌ Error: ${error.message}`;
     }
@@ -32,6 +31,7 @@ document.addEventListener("DOMContentLoaded", function () {
     input.value = "";
   });
 });
+
 document.addEventListener("DOMContentLoaded", () => {
   // find your form so we can place the button right after it
   const form = document.querySelector("form");
@@ -66,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
 // --- Mags Live Viewer mini UI ---
 document.addEventListener("DOMContentLoaded", () => {
   // Create a simple floating bar
@@ -73,7 +74,7 @@ document.addEventListener("DOMContentLoaded", () => {
   bar.id = "mags-live-bar";
   bar.style.cssText = `
     position: fixed; right: 16px; bottom: 16px; z-index: 9999;
-    display: flex; gap: 8px; align-items: center; 
+    display: flex; gap: 8px; align-items: center;
     background: rgba(0,0,0,.6); color: #fff; padding: 10px 12px; border-radius: 10px;
     backdrop-filter: blur(4px); font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
   `;

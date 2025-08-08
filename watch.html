@@ -3,86 +3,9 @@
 <head>
   <meta charset="utf-8" />
   <title>Mags Live Viewer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; padding: 24px; background:#0b0b0b; color:#fff; }
-    .row { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; }
-    input[type="text"] { width: 420px; max-width: 100%; padding:10px 12px; border-radius:10px; border:1px solid #2a2a2a; background:#111; color:#fff; }
-    button { padding:10px 14px; border-radius:10px; border:none; cursor:pointer; }
-    .primary { background:#3b82f6; color:#fff; }
-    .green { background:#10b981; color:#fff; }
-    .log { white-space: pre-wrap; background:#111; border:1px solid #2a2a2a; border-radius:10px; padding:12px; min-height: 120px; }
-    a { color:#60a5fa; }
-  </style>
 </head>
 <body>
-  <h1>🛰️ Mags – Live Viewer</h1>
-
-  <div class="row">
-    <button id="btn-blank" class="green">Watch Mags (blank)</button>
-    <input id="url" type="text" placeholder="https://dashboard.stripe.com/login" />
-    <button id="btn-open" class="primary">Watch + Open URL</button>
-  </div>
-
-  <div class="row">
-    <button id="btn-health">Health Check</button>
-    <button id="btn-start">Raw Start (JSON)</button>
-  </div>
-
-  <div class="log" id="log">Logs will appear here…</div>
-
-  <script>
-    const log = (m) => {
-      const el = document.getElementById('log');
-      el.innerHTML += (el.textContent.trim() ? '<br>' : '') + m;
-    };
-
-    async function stubbornOpen(viewerUrl, viewerUrlAlt) {
-      // Try popup first
-      let opened = viewerUrl ? window.open(viewerUrl, '_blank') : null;
-      if (!opened && viewerUrlAlt) opened = window.open(viewerUrlAlt, '_blank');
-
-      // If popups blocked, try same-tab
-      if (!opened && viewerUrl) { window.location.assign(viewerUrl); opened = true; }
-      if (!opened && viewerUrlAlt) { window.location.assign(viewerUrlAlt); opened = true; }
-
-      // Still blocked? Copy link so user can paste
-      if (!opened) {
-        const link = viewerUrlAlt || viewerUrl;
-        log(`Popup blocked — <a href="${link}" target="_blank">click here</a> (or paste from clipboard).`);
-        try { await navigator.clipboard.writeText(link); } catch {}
-        alert('Popup blocked. I copied the viewer URL to your clipboard — paste it in a new tab immediately.');
-      }
-    }
-
-    async function startSession(preloadUrl) {
-      const ttl = 120000; // 2 minutes
-      const q = preloadUrl ? `?ttl=${ttl}&url=${encodeURIComponent(preloadUrl)}` : `?ttl=${ttl}`;
-      const r = await fetch('/api/rpa/start' + q);
-      const j = await r.json();
-      log('Start JSON → ' + JSON.stringify({ ok: j.ok, ttl: j.ttl }, null, 2));
-      if (!j.ok) throw new Error(j.error || 'Failed to start session');
-      await stubbornOpen(j.viewerUrl, j.viewerUrlAlt);
-    }
-
-    document.getElementById('btn-health').onclick = async () => {
-      const r = await fetch('/api/rpa/health'); const j = await r.json();
-      log('Health → ' + JSON.stringify(j));
-    };
-
-    document.getElementById('btn-start').onclick = async () => {
-      try { await startSession(''); } catch (e) { alert(e.message); }
-    };
-
-    document.getElementById('btn-blank').onclick = async () => {
-      try { await startSession(''); } catch (e) { alert(e.message); }
-    };
-
-    document.getElementById('btn-open').onclick = async () => {
-      let u = document.getElementById('url').value.trim();
-      if (!u) u = 'https://dashboard.stripe.com/login';
-      try { await startSession(u); } catch (e) { alert(e.message); }
-    };
-  </script>
+  <div id="status">Starting session…</div>
+  <script src="watch.js"></script>
 </body>
 </html>
