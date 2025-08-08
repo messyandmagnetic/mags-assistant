@@ -1,15 +1,11 @@
-import { NextResponse } from 'next/server';
-
-const VARS = [
-  'OPENAI_API_KEY',
-  'BROWSERLESS_API_KEY',
-  'GOOGLE_CLIENT_ID',
-  'GOOGLE_CLIENT_SECRET',
-  'GOOGLE_REDIRECT_URI',
-  'STRIPE_SECRET_KEY',
-];
-
 export async function GET() {
-  const present = VARS.filter((v) => !!process.env[v]);
-  return NextResponse.json({ env: present });
+  const base =
+    process.env.BROWSERLESS_BASE || 'https://production-sfo.browserless.io';
+  const key = process.env.BROWSERLESS_API_KEY || process.env.BROWSERLESS_TOKEN || '';
+  return Response.json({
+    ok: true,
+    base,
+    haveKey: Boolean(key),
+    keyPreview: key ? `${key.slice(0,4)}…${key.slice(-4)} (${key.length})` : null
+  });
 }

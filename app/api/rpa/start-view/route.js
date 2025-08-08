@@ -1,24 +1,34 @@
-import { NextResponse } from 'next/server';
-
-const ENDPOINT = `https://production-sfo.browserless.io/sessions?token=${process.env.BROWSERLESS_API_KEY}`;
-
 export async function GET(req) {
-  try {
-    const { searchParams } = new URL(req.url);
-    const url = searchParams.get('url');
-    const ttl = searchParams.get('ttl');
-    const payload = { url, ttl };
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, error: data.error || 'Failed to start session' }, { status: res.status });
-    }
-    return NextResponse.json({ ok: true, viewerUrl: data.url });
-  } catch (err) {
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
+  const { searchParams } = new URL(req.url);
+  const ttl = Number(searchParams.get('ttl') || 45000);
+
+  const base =
+    process.env.BROWSERLESS_BASE || 'https://production-sfo.browserless.io';
+  const token =
+    process.env.BROWSERLESS_API_KEY || process.env.BROWSERLESS_TOKEN;
+
+  if (!token) {
+    return Response.json(
+      { ok: false, error: 'Missing BROWSERLESS_API_KEY (or BROWSERLESS_TOKEN).' },
+      { status: 500 }
+    );
   }
+
+  const res = await fetch(`${base}/sessions?token=${token}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ttl })
+  });
+
+  let data = {};
+  try { data = await res.json(); } catch (_) {}
+
+  if (!res.ok) {
+    return Response.json(
+      { ok: false, status: res.status, preview: JSON.stringify(data).slice(0, 200) },
+      { status: 500 }
+    );
+  }
+
+  return Response.json({ ok: true, ...data });
 }

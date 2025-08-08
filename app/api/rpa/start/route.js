@@ -1,22 +1,8 @@
-import { NextResponse } from 'next/server';
-
-const ENDPOINT = `https://production-sfo.browserless.io/sessions?token=${process.env.BROWSERLESS_API_KEY}`;
-
-export async function POST(req) {
-  try {
-    const { url, ttl } = await req.json();
-    const payload = { url, ttl };
-    const res = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      return NextResponse.json({ ok: false, error: data.error || 'Failed to start session' }, { status: res.status });
-    }
-    return NextResponse.json({ ok: true, viewerUrl: data.url, connect: data.ws || data.connect, ttl: data.ttl });
-  } catch (err) {
-    return NextResponse.json({ ok: false, error: err.message }, { status: 500 });
-  }
+export async function GET(req) {
+  // simple alias to start-view (kept for convenience)
+  const url = new URL(req.url);
+  url.pathname = '/api/rpa/start-view';
+  const res = await fetch(url, { method: 'GET', headers: {} });
+  const body = await res.text();
+  return new Response(body, { status: res.status, headers: { 'Content-Type': 'application/json' } });
 }
