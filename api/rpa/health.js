@@ -5,17 +5,18 @@ export default async function handler(req, res) {
     const base  = process.env.BROWSERLESS_BASE || "https://production-sfo.browserless.io";
     if (!token) return res.status(500).json({ ok: false, error: "Missing BROWSERLESS token" });
 
-    // Hit a simple REST endpoint with token (returns page HTML)
-    const url = `${base}/content?token=${encodeURIComponent(token)}&url=${encodeURIComponent("https://example.com")}`;
-    const r   = await fetch(url);
-    const text = await r.text();
-
-    res.status(200).json({
-      ok: r.ok,
-      status: r.status,
-      base,
-      preview: text.slice(0, 200)
+    // Try to create a very short session (headless) just to prove auth works
+    const r = await fetch(`${base}/session?token=${encodeURIComponent(token)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ttl: 4000, headless: true })
     });
+
+    const text = await r.text();
+    if (!r.ok) return res.status(r.status).json({ ok: false, error: text, base });
+
+    const session = JSON.parse(text); // { connect: "wss://.../session/connect/..." }
+    return res.status(200).json({ ok: true, base, gotConnectUrl: !!session.connect });
   } catch (e) {
     res.status(500).json({ ok: false, error: String(e) });
   }
