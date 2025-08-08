@@ -6,16 +6,14 @@ export default async function handler(req, res) {
     if (!token) return res.status(500).json({ ok: false, error: "Missing BROWSERLESS token" });
 
     const ttlMs = Math.min(Number(req.query.ttl || 15000), 60000);
+    const url   = (req.query.url || "").toString().trim();
+    const args  = ["--no-sandbox","--disable-dev-shm-usage"];
+    if (url) args.push(`--app=${url}`);
 
     const r = await fetch(`${base}/session?token=${encodeURIComponent(token)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ttl: ttlMs,
-        headless: false,
-        stealth: true,
-        args: ["--no-sandbox","--disable-dev-shm-usage"]
-      })
+      body: JSON.stringify({ ttl: ttlMs, headless: false, stealth: true, args })
     });
 
     const text = await r.text();

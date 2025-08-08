@@ -26,7 +26,6 @@
   <div class="row">
     <button id="btn-health">Health Check</button>
     <button id="btn-start">Raw Start (JSON)</button>
-    <button id="btn-viewer">Viewer (redirect)</button>
   </div>
 
   <div class="log" id="log">Logs will appear here…</div>
@@ -34,48 +33,38 @@
   <script>
     const log = (m) => {
       const el = document.getElementById('log');
-      el.textContent = (el.textContent ? el.textContent + '\n' : '') + m;
+      el.textContent = (el.textContent ? el.textContent + '\\n' : '') + m;
     };
 
     document.getElementById('btn-health').onclick = async () => {
-      log('Calling /api/rpa/health …');
       const r = await fetch('/api/rpa/health');
       const j = await r.json();
-      log(JSON.stringify(j, null, 2));
+      log('Health -> ' + JSON.stringify(j));
     };
 
     document.getElementById('btn-start').onclick = async () => {
-      log('Calling /api/rpa/start?ttl=45000 …');
       const r = await fetch('/api/rpa/start?ttl=45000');
       const j = await r.json();
-      log(JSON.stringify(j, null, 2));
+      log('Start JSON -> ' + JSON.stringify(j));
     };
 
-    document.getElementById('btn-viewer').onclick = () => {
-      log('Opening /api/rpa/viewer?redirect=1 …');
-      const w = window.open('/api/rpa/viewer?redirect=1', '_blank');
-      if (!w) alert('Enable pop-ups and try again.');
-    };
-
-    document.getElementById('btn-blank').onclick = () => {
-      const w = window.open('/api/rpa/viewer?redirect=1', '_blank');
-      if (!w) alert('Enable pop-ups and try again.');
+    document.getElementById('btn-blank').onclick = async () => {
+      // open fresh viewer from start JSON (no redirect route needed)
+      const r = await fetch('/api/rpa/start?ttl=45000');
+      const j = await r.json();
+      if (!j.ok) return alert(j.error || 'Failed to start');
+      const w = window.open(j.viewerUrl, '_blank');
+      if (!w) alert('Enable pop-ups for this site and try again.');
     };
 
     document.getElementById('btn-open').onclick = async () => {
       let u = document.getElementById('url').value.trim();
       if (!u) u = 'https://dashboard.stripe.com/login';
-      log('Starting session + preloading: ' + u);
       const r = await fetch('/api/rpa/start?ttl=45000&url=' + encodeURIComponent(u));
       const j = await r.json();
-      if (!j.ok) {
-        log('ERROR: ' + (j.error || 'Could not start session'));
-        alert(j.error || 'Could not start session');
-        return;
-      }
+      if (!j.ok) return alert(j.error || 'Failed to start');
       const w = window.open(j.viewerUrl, '_blank');
-      if (!w) alert('Enable pop-ups and try again.');
-      log('Opened viewer.');
+      if (!w) alert('Enable pop-ups for this site and try again.');
     };
   </script>
 </body>
