@@ -22,13 +22,21 @@
       const input = document.getElementById('input').value;
       const chat = document.getElementById('chat');
       chat.innerText += `\n\nYou: ${input}`;
-      const res = await fetch('/api/ask', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt: input }),
-      });
-      const data = await res.json();
-      chat.innerText += `\nMags: ${data.response}`;
+      try {
+        const res = await fetch('/api/run-command', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ command: input }),
+        });
+        const data = await res.json();
+        if (data.error) {
+          chat.innerText += `\nError: ${data.error}`;
+        } else {
+          chat.innerText += `\nMags: ${data.message}`;
+        }
+      } catch (e) {
+        chat.innerText += `\nError: ${e.message}`;
+      }
       document.getElementById('input').value = '';
     }
   </script>
