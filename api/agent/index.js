@@ -108,6 +108,68 @@ export default async function handler(req, res) {
       }
     }
 
+    if (action === "trendsToday") {
+      try {
+        const r = await fetch(baseUrl + "/api/trends/digest?when=today");
+        const data = await r.json();
+        return json(res, 200, data);
+      } catch (e) {
+        return json(res, 200, { ok: false, error: e.message });
+      }
+    }
+
+    if (action === "createProject") {
+      return json(res, 200, { ok: true, project: { title: params.title || "" } });
+    }
+
+    if (action === "scheduleDraft") {
+      try {
+        const r = await fetch(baseUrl + "/api/social/schedule", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ when: params.when }),
+        });
+        const data = await r.json();
+        return json(res, 200, data);
+      } catch (e) {
+        return json(res, 200, { ok: false, error: e.message });
+      }
+    }
+
+    if (action === "replyPlan") {
+      try {
+        const r = await fetch(baseUrl + `/api/social/comments/plan?postId=${encodeURIComponent(params.postId || "")}`);
+        const data = await r.json();
+        return json(res, 200, data);
+      } catch (e) {
+        return json(res, 200, { ok: false, error: e.message });
+      }
+    }
+
+    if (action === "scanTrendsNow") {
+      try {
+        const r = await fetch(baseUrl + "/api/trends/refresh", { method: "POST" });
+        const data = await r.json();
+        return json(res, 200, data);
+      } catch (e) {
+        return json(res, 200, { ok: false, error: e.message });
+      }
+    }
+
+    if (action === "fallbackNow") {
+      try {
+        const r = await fetch(baseUrl + "/api/social/fallback", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(params || {}),
+        });
+        const data = await r.json();
+        return json(res, 200, data);
+      } catch (e) {
+        return json(res, 200, { ok: false, error: e.message });
+      }
+    }
+
     return json(res, 400, { ok: false, error: "Unknown action" });
   } catch (err) {
     return json(res, 500, { ok: false, error: err.message || "Internal error" });
