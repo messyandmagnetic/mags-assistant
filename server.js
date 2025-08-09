@@ -1,6 +1,6 @@
 import { createServer } from 'http';
 import { parse } from 'url';
-import { join } from 'path';
+import { join, extname } from 'path';
 import { readFile } from 'fs/promises';
 import { existsSync, statSync } from 'fs';
 import { validateEnv } from './api/_lib/env.js';
@@ -38,12 +38,19 @@ async function sendFile(res, filePath, contentType = 'text/html') {
 
 createServer(async (req, res) => {
   let { pathname } = parse(req.url, true);
+  console.log(`${req.method} ${pathname}`);
 
   if (pathname === '/viewer' || pathname.startsWith('/viewer/')) {
     pathname = pathname.replace('/viewer', '/watch');
   }
   if (pathname === '/health') {
     pathname = '/api/health';
+  }
+  if (pathname === '/bootstrap') {
+    pathname = '/api/bootstrap';
+  }
+  if (pathname === '/syncstripe') {
+    pathname = '/api/syncstripe';
   }
 
   if (pathname.startsWith('/api/')) {
@@ -75,7 +82,11 @@ createServer(async (req, res) => {
     return;
   }
 
-  const filePath = join(publicDir, pathname === '/' ? 'index.html' : pathname);
+  let filePath = join(publicDir, pathname === '/' ? 'index.html' : pathname);
+  if (!existsSync(filePath) && !extname(filePath)) {
+    const htmlPath = `${filePath}.html`;
+    if (existsSync(htmlPath)) filePath = htmlPath;
+  }
   if (existsSync(filePath) && !statSync(filePath).isDirectory()) {
     await sendFile(res, filePath);
     return;

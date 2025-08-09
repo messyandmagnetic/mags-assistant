@@ -2,16 +2,13 @@ import { cors, ok, fail } from "../lib/http.js";
 
 export const config = { runtime: "nodejs" };
 
-export default function handler(req, res) {
+export default async function handler(req, res) {
   console.log(`${req.method} ${req.url}`);
   cors(req, res);
-  if (req.method === "HEAD") {
-    res.status(200).end();
-    return;
-  }
-  if (req.method !== "GET") return fail(res, 405, "Method not allowed");
+  if (req.method !== "POST") return fail(res, 405, "Method not allowed");
   try {
-    ok(res, { status: 200 });
+    console.log("bootstrap triggered");
+    ok(res, { status: "bootstrapped" });
   } catch (err) {
     console.error(err);
     fail(res, 500, err.message || "Internal error");
