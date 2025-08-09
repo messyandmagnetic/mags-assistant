@@ -1,10 +1,13 @@
 {
   "name": "mags-assistant",
   "private": true,
+  "type": "module",
   "engines": {
     "node": "20.x"
   },
   "scripts": {
+    "build": "echo 'nothing to build'",
+    "start": "node server.js",
     "test": "echo 'no tests'"
   }
 }
