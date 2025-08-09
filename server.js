@@ -40,17 +40,28 @@ createServer(async (req, res) => {
   let { pathname } = parse(req.url, true);
   console.log(`${req.method} ${pathname}`);
 
-  if (pathname === '/watch' || pathname.startsWith('/watch/')) {
-    pathname = pathname.replace('/watch', '/viewer');
+  if (pathname === '/viewer' || pathname.startsWith('/viewer/')) {
+    pathname = pathname.replace('/viewer', '/watch');
   }
   if (pathname === '/health') {
-    pathname = '/api/health';
+    req.url = '/api/util?op=health';
+    pathname = '/api/util';
   }
   if (pathname === '/bootstrap') {
-    pathname = '/api/bootstrap';
+    req.url = '/api/util?op=bootstrap';
+    pathname = '/api/util';
   }
   if (pathname === '/syncstripe') {
-    pathname = '/api/syncstripe';
+    req.url = '/api/util?op=syncstripe';
+    pathname = '/api/util';
+  }
+  if (pathname === '/run-command') {
+    req.url = '/api/util?op=run-command';
+    pathname = '/api/util';
+  }
+
+  if (pathname === '/watch/') {
+    pathname = '/watch';
   }
 
   if (pathname.startsWith('/api/')) {

@@ -20,7 +20,7 @@ export default async function handler(req, res) {
       if (!url) throw new Error("missing");
       new URL(url);
     } catch {
-      return json(res, 200, {
+      return json(res, 400, {
         ok: false,
         code: "BAD_REQUEST",
         message: "'url' is required",
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
       // await fetch(...)
     }
 
-    return json(res, 200, { ok: true, started: true, url, jobId: Math.random().toString(36).slice(2, 8) });
+    return json(res, 200, { ok: true, started: true, url });
   } catch (err) {
     const id = Math.random().toString(36).slice(2, 8);
     console.error(id, err);

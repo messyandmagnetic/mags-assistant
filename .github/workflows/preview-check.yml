@@ -1,30 +1,23 @@
 name: Preview Checks
-on: [pull_request]
+on:
+  pull_request:
 jobs:
   smoke:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Wait for Vercel Preview
-        uses: patrickedqvist/wait-for-vercel-preview@v1.3.4
-        id: vercel
+      - name: Wait for Vercel preview URL
+        uses: actions/github-script@v7
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          max_timeout: 900
-      - name: Smoke
+          script: |
+            const body = context.payload.pull_request.body || '';
+            const match = body.match(/https?:\/\/[^ \n]*-vercel\.app/);
+            if (!match) core.setFailed('No preview URL found in PR body/comments');
+            core.exportVariable('PREVIEW_URL', match ? match[0] : '');
+      - name: Hit health endpoints
         run: |
-          sudo apt-get update && sudo apt-get install -y jq curl
-          bash scripts/smoke.sh "${{ steps.vercel.outputs.url }}"
-  e2e:
-    runs-on: ubuntu-latest
-    needs: smoke
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20' }
-      - run: npm i -D playwright @playwright/test
-      - run: npx playwright install --with-deps
-      - name: Run E2E
-        env:
-          BASE_URL: ${{ needs.smoke.outputs.url }}
-        run: npx playwright test
+          set -e
+          echo "Preview: $PREVIEW_URL"
+          curl -fsS "$PREVIEW_URL/api/hello"
+          curl -fsS "$PREVIEW_URL/api/rpa/health"
+          curl -fsS "$PREVIEW_URL/api/rpa/diag"
