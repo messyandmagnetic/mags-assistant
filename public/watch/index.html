@@ -5,13 +5,14 @@
   <title>Mags Live Viewer</title>
 </head>
 <body>
-  <label>
-    URL:
-    <input id="url" type="url" value="https://example.com" />
-  </label>
-  <button id="start">Start</button>
-  <p>Sample target: <a href="https://example.com" target="_blank" rel="noopener noreferrer">https://example.com</a></p>
-  <p id="status"></p>
-  <script src="/watch/watch.js"></script>
+<select id="presetUrl">
+  <option value="https://messyandmagnetic.com">Messy & Magnetic</option>
+  <option value="https://dashboard.stripe.com/login">Stripe Dashboard</option>
+</select>
+<input id="url" type="text" value="https://messyandmagnetic.com" />
+<button id="start">Start</button>
+<button id="runBoth">Run Both</button>
+<pre id="out"></pre>
+<script src="/watch/watch.js"></script>
 </body>
 </html>

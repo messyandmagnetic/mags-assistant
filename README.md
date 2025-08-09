@@ -1,15 +1,10 @@
 # Mags Assistant
 
-Quick checks:
+Production smoke tests:
 
-- `GET /` → shows landing page
-- `GET /watch` → viewer loads (no 404)
-- `GET /api/hello` → `{ ok: true }`
-- `GET /api/rpa/diag`, `GET /api/rpa/health` → `{ ok: true }`
-- `POST /api/rpa/start` example:
-
-```
-curl -X POST https://mags-assistant.vercel.app/api/rpa/start \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
-```
+- `/` — landing page
+- `/watch` — viewer page (dropdown, text field, Start, Run Both)
+- `/api/hello` → `{ ok:true, hello:"mags" }`
+- `/api/rpa/diag` → shows ok, base, haveKey
+- `/api/rpa/health` → `{ ok:true }` (when Browserless up)
+- `curl -X POST https://mags-assistant.vercel.app/api/rpa/start -H 'Content-Type: application/json' -d '{"url":"https://example.com"}'`
