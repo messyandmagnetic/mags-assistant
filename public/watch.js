@@ -1,6 +1,11 @@
-const $ = (id)=>document.getElementById(id);
-$("go").onclick = async () => {
+const $ = (id) => document.getElementById(id);
+
+$("start").onclick = async () => {
   const url = $("url").value.trim();
+  if (!url) {
+    $("out").textContent = "missing URL";
+    return;
+  }
   $("out").textContent = "Starting…";
   try {
     const r = await fetch("/api/rpa/start", {
@@ -8,9 +13,9 @@ $("go").onclick = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url })
     });
-    const data = await r.json().catch(()=>({error:"Invalid JSON"}));
+    const data = await r.json();
     $("out").textContent = JSON.stringify(data, null, 2);
-  } catch (e) {
-    $("out").textContent = JSON.stringify({ ok:false, error: String(e) }, null, 2);
+  } catch (err) {
+    $("out").textContent = JSON.stringify({ ok: false, error: err.message || String(err) }, null, 2);
   }
 };

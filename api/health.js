@@ -1,11 +1,14 @@
-export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+import { cors, ok, fail } from "../lib/http.js";
 
-  return res.status(200).json({ ok: true, status: 200 });
+export const config = { runtime: "nodejs" };
+
+export default function handler(req, res) {
+  cors(req, res);
+  if (req.method !== "GET") return fail(res, 405, "Method not allowed");
+  try {
+    ok(res, { status: 200 });
+  } catch (err) {
+    console.error(err);
+    fail(res, 500, err.message || "Internal error");
+  }
 }
-
-export const config = { runtime: 'nodejs20.x' };
-

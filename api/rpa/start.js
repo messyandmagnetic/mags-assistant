@@ -1,22 +1,22 @@
-import { allowCors, ok, fail } from "../_util.js";
+import { cors, ok, fail } from "../../lib/http.js";
+
+export const config = { runtime: "nodejs" };
 
 export default async function handler(req, res) {
-  if (allowCors(req, res)) return;
-  if (req.method !== "POST") return fail(res, 405, "Method Not Allowed");
-
-  let url;
-  try { ({ url } = req.body || {}); } catch { /* form/malformed */ }
-  if (!url || typeof url !== "string") return fail(res, 400, "Missing 'url'");
-
+  if (cors(req, res)) return;
+  if (req.method !== "POST") return fail(res, 405, "Method not allowed");
   try {
-    // If Browserless key is available, call it; otherwise simulate success.
+    const { url } = req.body || {};
+    if (!url || typeof url !== "string") return fail(res, 400, "Missing 'url'");
+
     if (process.env.BROWSERLESS_API_KEY) {
-      // TODO: fetch to Browserless with the URL; return parsed result
-      // Keep the code resilient—timeouts and non-200s return fail(...).
+      // Intended Browserless call would go here using the API key and URL.
+      // await fetch(...);
     }
-    return ok(res, { started: true, target: url });
-  } catch (e) {
-    return fail(res, 502, "RPA start failed", { detail: String(e) });
+
+    ok(res, { started: true });
+  } catch (err) {
+    console.error(err);
+    fail(res, 500, err.message || "Internal error");
   }
 }
-export const config = { runtime: "nodejs20.x" };
