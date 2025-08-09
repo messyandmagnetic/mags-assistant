@@ -14,11 +14,26 @@ export default async function handler(req, res) {
     return;
   }
 
-  const ttl = Number(req.query.ttl || '45000');
-  const url = req.query.url;
+  const params = req.method === 'POST' ? (req.body || {}) : (req.query || {});
+
+  const allowedKeys = ['url', 'ttl'];
+  const unknown = Object.keys(params).find((k) => !allowedKeys.includes(k));
+  if (unknown) {
+    res.status(400).json({ ok: false, error: `Unknown field: ${unknown}` });
+    return;
+  }
+
+  const url = params.url;
+  let ttl = params.ttl;
+  if (ttl === undefined || ttl === null || ttl === '') ttl = 300;
+  ttl = Number(ttl);
+  if (!Number.isInteger(ttl) || ttl < 30 || ttl > 3600) {
+    res.status(400).json({ ok: false, error: 'Invalid ttl' });
+    return;
+  }
 
   const base = process.env.BROWSERLESS_BASE || 'https://production-sfo.browserless.io';
-  const endpoint = `${base}/content?token=${encodeURIComponent(token)}`;
+  const endpoint = `${base}/sessions?token=${encodeURIComponent(token)}`;
 
   const payload = { ttl };
   if (url) payload.url = url;
@@ -37,7 +52,9 @@ export default async function handler(req, res) {
     }
 
     const data = JSON.parse(text);
-    res.status(200).json({ ok: true, viewerUrl: data.viewerUrl, connect: data.connect });
+    res
+      .status(200)
+      .json({ ok: true, viewerUrl: data.viewerUrl, connect: data.connect });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
   }

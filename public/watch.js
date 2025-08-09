@@ -5,7 +5,11 @@
   try {
     log('Starting cloud browser…');
     const urlToOpen = 'https://dashboard.stripe.com/login';
-    const res = await fetch('/api/rpa/start?ttl=45000&url=' + encodeURIComponent(urlToOpen));
+    const res = await fetch('/api/rpa/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url: urlToOpen, ttl: 300 })
+    });
     const json = await res.json();
     if (!res.ok || !json.ok) {
       log('Error: ' + (json.error || res.statusText));
