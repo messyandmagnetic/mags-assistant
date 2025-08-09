@@ -4,12 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Viewer</title>
+  <link rel="stylesheet" href="/brand.css">
 </head>
 <body>
+<div class="container viewer-wrap">
+  <h1>Viewer</h1>
   <input id="targetUrl" type="text" />
-  <button id="startBtn">Start</button>
+  <button id="startBtn" class="button">Start</button>
   <small><a href="?url=https://example.com">Sample target</a></small>
   <div id="status"></div>
-  <script src="/watch.js"></script>
+</div>
+<script src="/watch.js"></script>
 </body>
 </html>

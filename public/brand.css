@@ -1,0 +1,22 @@
+@import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@500;600&family=Quicksand:wght@400;600&display=swap');
+:root{--rose:#D6A5B1;--lavender:#C6B4CE;--sage:#A3B18A;--cream:#FDF6EC;--ink:#2F2A2A;--smoke:#EFEAEC;--shadow:rgba(0,0,0,.10);--focus:#F0D9FF;--radius:12px}
+html,body{background:var(--cream);color:var(--ink);font-family:Quicksand,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;margin:0}
+.container{max-width:960px;margin:24px auto;padding:0 16px}
+h1,h2,h3{font-family:"Dancing Script",cursive;font-weight:600;letter-spacing:.2px;margin:0 0 12px;color:var(--ink)}
+.card{background:#fff;border:1px solid var(--smoke);border-radius:var(--radius);box-shadow:0 6px 20px var(--shadow);padding:16px;margin:16px 0}
+.button-row{display:flex;flex-wrap:wrap;gap:8px}
+a.button,button.button{display:inline-block;background:#fff;border:1px solid var(--smoke);border-radius:10px;padding:10px 14px;text-decoration:none;color:var(--ink);cursor:pointer;transition:transform .06s,box-shadow .06s,background .2s}
+a.button:hover,button.button:hover{background:var(--cream);transform:translateY(-1px);box-shadow:0 4px 14px var(--shadow)}
+a.button:focus,button.button:focus,input:focus,select:focus{outline:3px solid var(--focus);outline-offset:1px}
+.badge{display:inline-flex;align-items:center;font-size:12px;padding:4px 8px;border-radius:20px;background:var(--lavender);color:#fff}
+hr{border:0;height:1px;background:var(--smoke);margin:16px 0}
+input[type="text"],input[type="url"],input[type="file"],select{background:#fff;border:1px solid var(--smoke);border-radius:10px;padding:10px 12px;color:var(--ink)}
+label{display:inline-flex;gap:8px;align-items:center;margin:6px 10px 6px 0}
+#taskForm{display:flex;flex-direction:column;gap:8px}
+#taskInput{width:100%;max-width:720px}
+#presetButtons button{background:#fff;border:1px solid var(--smoke);border-radius:999px;padding:8px 12px}
+#micBtn{border:1px solid var(--rose);background:linear-gradient(180deg,#fff,#fff0f6);color:var(--rose);border-radius:999px;padding:8px 12px}
+.viewer-wrap{padding:16px}
+.viewer-wrap h1{color:var(--rose)}
+pre{background:#fff;border:1px solid var(--smoke);border-radius:10px;padding:12px;overflow:auto}
+.button.rose{border-color:var(--rose);color:var(--rose)}.button.lav{border-color:var(--lavender);color:var(--lavender)}.button.sage{border-color:var(--sage);color:var(--sage)}
