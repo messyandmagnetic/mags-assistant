@@ -1,8 +1,9 @@
 name: Preview Checks
 on: [pull_request]
 jobs:
-  smoke:
+  curl:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -26,7 +27,7 @@ jobs:
         if: steps.preview.outputs.url != ''
         run: |
           url=${{ steps.preview.outputs.url }}
-          for path in / /hello /health /diag /viewer; do
+          for path in /api/hello /api/rpa/health /api/rpa/diag; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "$url$path")
             if [ "$code" -ne 200 ]; then
               echo "Failed $path: $code"

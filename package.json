@@ -5,6 +5,6 @@
   "scripts": {
     "build": "echo \"static + api\"",
     "start": "node server.js || echo \"Using Vercel serverless\"",
-    "test": "node --check api/status.js api/rpa/index.js"
+    "test": "node --check api/router.js"
   }
 }
