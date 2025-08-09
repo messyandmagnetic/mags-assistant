@@ -1,8 +1,0 @@
-{
-  "rewrites": [
-    { "source": "/viewer", "destination": "/watch" },
-    { "source": "/viewer/(.*)", "destination": "/watch/$1" },
-    { "source": "/health", "destination": "/api/health" }
-  ]
-}
-
