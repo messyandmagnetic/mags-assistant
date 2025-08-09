@@ -8,15 +8,20 @@
     const res = await fetch('/api/rpa/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: urlToOpen, ttl: 300 })
+      body: JSON.stringify({ url: urlToOpen })
     });
     const json = await res.json();
     if (!res.ok || !json.ok) {
       log('Error: ' + (json.error || res.statusText));
       return;
     }
-    log('Opening live viewer…');
-    window.location.href = json.viewerUrl || json.viewerUrlAlt;
+    const dest = json.viewerUrl || json.viewerUrlAlt || json.url;
+    if (dest) {
+      log('Opening…');
+      window.location.href = dest;
+    } else {
+      log('Error: missing url');
+    }
   } catch (e) {
     log('Error: ' + e.message);
   }
