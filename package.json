@@ -1,0 +1,10 @@
+{
+  "name": "mags-assistant",
+  "private": true,
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "test": "echo 'no tests'"
+  }
+}
