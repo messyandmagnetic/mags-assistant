@@ -40,8 +40,8 @@ createServer(async (req, res) => {
   let { pathname } = parse(req.url, true);
   console.log(`${req.method} ${pathname}`);
 
-  if (pathname === '/viewer' || pathname.startsWith('/viewer/')) {
-    pathname = pathname.replace('/viewer', '/watch');
+  if (pathname === '/watch' || pathname.startsWith('/watch/')) {
+    pathname = pathname.replace('/watch', '/viewer');
   }
   if (pathname === '/health') {
     pathname = '/api/health';

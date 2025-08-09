@@ -1,0 +1,23 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Source+Sans+Pro:wght@400;600&family=Satisfy&display=swap');
+:root{
+  --bg:#F8F1E6;
+  --ink:#2E2A27;
+  --accent:#E6C9D1;
+  --muted:#F2EAE2;
+  --radius:12px;
+}
+html,body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:Inter,'Source Sans Pro',sans-serif;
+  margin:0;
+}
+.container{max-width:960px;margin:24px auto;padding:0 16px;}
+.card{background:#fff;border:1px solid var(--muted);border-radius:var(--radius);box-shadow:0 6px 20px rgba(0,0,0,.1);padding:16px;margin:16px 0;}
+h1,h2{font-family:'Satisfy',cursive;font-weight:400;letter-spacing:.2px;margin:0 0 12px;}
+a.button,button.button{display:inline-block;background:#fff;border:1px solid var(--muted);border-radius:10px;padding:10px 14px;text-decoration:none;color:var(--ink);cursor:pointer;transition:transform .06s,box-shadow .06s,background .2s;}
+a.button:hover,button.button:hover{background:var(--muted);transform:translateY(-1px);box-shadow:0 4px 14px rgba(0,0,0,.1);}
+a.button:focus,button.button:focus,input:focus,select:focus{outline:3px solid var(--accent);outline-offset:1px;}
+.viewer form{display:flex;flex-wrap:wrap;gap:8px;}
+.viewer pre{background:#fff;border:1px solid var(--muted);border-radius:10px;padding:12px;overflow:auto;}
+.hint{color:var(--accent);margin:4px 0 0;font-size:.9rem;}

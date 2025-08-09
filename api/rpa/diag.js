@@ -1,17 +1,20 @@
-import { cors, ok, fail } from "../../lib/http.js";
+import { cors, ok, fail, withLogging, rateLimit } from "../../lib/http.js";
 
 export const config = { runtime: "nodejs" };
 
-export default function handler(req, res) {
-  console.log(`${req.method} ${req.url}`);
-  cors(req, res);
-  if (req.method !== "GET") return fail(res, 405, "Method not allowed");
+export default withLogging(function handler(req, res, requestId) {
+  if (cors(req, res)) return;
+  if (req.method !== "GET")
+    return fail(res, 405, "Method not allowed", { id: requestId });
+  if (rateLimit(req))
+    return fail(res, 429, "Too many requests", { id: requestId });
   try {
-    const baseUrl = `https://${req.headers.host}`;
-    const haveOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
-    ok(res, { baseUrl, haveOpenAIKey });
+    const flags = {
+      haveOpenAIKey: Boolean(process.env.OPENAI_API_KEY),
+      node: process.version,
+    };
+    ok(res, { baseUrl: `https://${req.headers.host}`, flags });
   } catch (err) {
-    console.error(err);
-    fail(res, 500, err.message || "Internal error");
+    fail(res, 500, err.message || "Internal error", { id: requestId });
   }
-}
+});
