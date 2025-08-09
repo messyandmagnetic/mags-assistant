@@ -1,9 +1,8 @@
 name: Preview Checks
 on: [pull_request]
 jobs:
-  curl:
+  smoke:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -15,8 +14,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          url=""
           for i in {1..20}; do
-            url=$(gh api repos/${{ github.repository }}/deployments --jq '.[] | select(.environment=="Preview") | .payload.web_url' | head -n 1)
+            url=$(gh api repos/${{ github.repository }}/deployments --jq '.[] | select(.environment=="Preview") | .payload.web_url' 2>/dev/null | head -n 1 || true)
             if [ -n "$url" ] && [ "$url" != "null" ]; then
               echo "url=$url" >> $GITHUB_OUTPUT
               break

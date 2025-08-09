@@ -1,5 +1,7 @@
 import { cors, ok, fail, json } from "../lib/http.js";
 
+export const config = { runtime: "nodejs" };
+
 export default async function handler(req, res) {
   console.log(`${req.method} ${req.url}`);
   try {
