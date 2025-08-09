@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Viewer</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <div class="container viewer">
+    <h1>Viewer</h1>
+    <form id="viewerForm">
+      <input id="url" type="url" placeholder="https://example.com" required>
+      <button class="button" id="startBtn">Start</button>
+      <p class="hint" id="hint"></p>
+    </form>
+    <pre id="result" data-test="result"></pre>
+    <p><a class="button" href="/">\u2190 Home</a></p>
+  </div>
+  <script src="/viewer/viewer.js"></script>
+</body>
+</html>

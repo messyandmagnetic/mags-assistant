@@ -1,41 +1,32 @@
-import { cors, json } from "../../lib/http.js";
+import { cors, ok, fail, json, withLogging, rateLimit } from "../../lib/http.js";
 
 export const config = { runtime: "nodejs" };
 
-export default async function handler(req, res) {
-  console.log(`${req.method} ${req.url}`);
+export default withLogging(async function handler(req, res, requestId) {
+  if (cors(req, res)) return;
+  if (req.method !== "POST")
+    return fail(res, 405, "Method not allowed", { id: requestId });
+  if (rateLimit(req))
+    return fail(res, 429, "Too many requests", { id: requestId });
   try {
-    if (cors(req, res)) return;
-    if (req.method !== "POST") {
-      return json(res, 405, {
-        ok: false,
-        code: "METHOD_NOT_ALLOWED",
-        message: "Method not allowed",
-      });
-    }
-
     const body = req.body && typeof req.body === "object" ? req.body : {};
     const url = typeof body.url === "string" ? body.url.trim() : "";
     try {
       if (!url) throw new Error("missing");
-      new URL(url);
+      const u = new URL(url);
+      if (u.protocol !== "https:") throw new Error("https required");
     } catch {
-      return json(res, 400, {
+      return json(res, 200, {
         ok: false,
-        code: "BAD_REQUEST",
-        message: "'url' is required",
+        status: 400,
+        message: "'url' must be https",
+        id: requestId,
       });
     }
 
-    // Placeholder for future work kick-off
-    if (process.env.BROWSERLESS_API_KEY) {
-      // await fetch(...)
-    }
-
-    return json(res, 200, { ok: true, started: true, url });
+    const jobId = Math.random().toString(36).slice(2, 10);
+    return ok(res, { jobId });
   } catch (err) {
-    const id = Math.random().toString(36).slice(2, 8);
-    console.error(id, err);
-    return json(res, 500, { ok: false, code: "INTERNAL_ERROR", id });
+    return fail(res, 500, err.message || "Internal error", { id: requestId });
   }
-}
+});
