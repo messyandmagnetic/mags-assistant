@@ -16,6 +16,7 @@ The following variables must be configured in Vercel:
 
 ## How to test
 
-- GET `/api/rpa/health` → `{ ok: true }`
-- POST `/api/run-command` with `{ "command": "hello" }`
-- Visit `/watch.html?url=https%3A%2F%2Fdashboard.stripe.com%2Flogin`
+- https://mags-assistant.vercel.app/api/hello → `{ ok: true, hello: "mags" }`
+- https://mags-assistant.vercel.app/api/rpa/diag → shows base and haveKey
+- https://mags-assistant.vercel.app/api/rpa/health → `{ ok: true }`
+- https://mags-assistant.vercel.app/watch → loads viewer page

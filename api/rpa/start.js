@@ -1,34 +1,33 @@
-// api/rpa/start.js
 export default async function handler(req, res) {
+  const key = process.env.BROWSERLESS_API_KEY;
+  const base = process.env.BROWSERLESS_BASE || 'https://production-sfo.browserless.io';
+
+  if (!key) {
+    return res.status(400).json({ ok: false, error: 'Missing BROWSERLESS_API_KEY' });
+  }
+
+  const urlParam = req.query.url ? String(req.query.url) : undefined;
+  const ttlMs = Number(req.query.ttl || '45000');
+
   try {
-    const base =
-      process.env.BROWSERLESS_BASE || 'https://production-sfo.browserless.io';
-    const token =
-      process.env.BROWSERLESS_TOKEN || process.env.BROWSERLESS_API_KEY;
-
-    const ttlMs = Number(req.query.ttl || '45000');
-
-    if (!token) {
-      return res
-        .status(500)
-        .json({ ok: false, error: 'Missing BROWSERLESS_API_KEY/TOKEN' });
-    }
-
-    const url = `${base}/sessions?token=${encodeURIComponent(token)}`;
-    const resp = await fetch(url, {
+    const resp = await fetch(`${base}/sessions?token=${encodeURIComponent(key)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ttl: ttlMs })
+      body: JSON.stringify({
+        ttl: ttlMs,
+        ...(urlParam ? { url: urlParam } : {})
+      })
     });
 
-    const text = await resp.text();
     if (!resp.ok) {
-      return res.status(resp.status).json({ ok: false, error: text });
+      const text = await resp.text();
+      return res.status(502).json({ ok: false, error: text });
     }
 
-    const data = JSON.parse(text); // { id, ttl, connect, viewerUrl }
-    return res.status(200).json({ ok: true, ...data });
+    const data = await resp.json();
+    const { viewerUrl, connect } = data;
+    return res.status(200).json({ ok: true, viewerUrl, connect });
   } catch (err) {
-    return res.status(500).json({ ok: false, error: String(err) });
+    return res.status(502).json({ ok: false, error: String(err) });
   }
 }
