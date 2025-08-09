@@ -1,3 +1,14 @@
-import { ok } from "./_util.js";
-export default function handler(req, res) { ok(res, { hello: "mags" }); }
-export const config = { runtime: "nodejs20.x" };
+import { cors, ok, fail } from "../lib/http.js";
+
+export const config = { runtime: "nodejs" };
+
+export default function handler(req, res) {
+  cors(req, res);
+  if (req.method !== "GET") return fail(res, 405, "Method not allowed");
+  try {
+    ok(res);
+  } catch (err) {
+    console.error(err);
+    fail(res, 500, err.message || "Internal error");
+  }
+}

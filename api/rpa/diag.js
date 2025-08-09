@@ -1,8 +1,16 @@
-import { ok } from "../_util.js";
+import { cors, ok, fail } from "../../lib/http.js";
+
+export const config = { runtime: "nodejs" };
+
 export default function handler(req, res) {
-  ok(res, {
-    baseUrl: process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
-    haveKey: Boolean(process.env.BROWSERLESS_API_KEY || process.env.OPENAI_API_KEY)
-  });
+  cors(req, res);
+  if (req.method !== "GET") return fail(res, 405, "Method not allowed");
+  try {
+    const baseUrl = `https://${req.headers.host}`;
+    const haveOpenAIKey = Boolean(process.env.OPENAI_API_KEY);
+    ok(res, { baseUrl, haveOpenAIKey });
+  } catch (err) {
+    console.error(err);
+    fail(res, 500, err.message || "Internal error");
+  }
 }
-export const config = { runtime: "nodejs20.x" };
