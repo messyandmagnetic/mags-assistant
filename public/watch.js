@@ -1,12 +1,14 @@
 const $ = (id) => document.getElementById(id);
 
-$("start").onclick = async () => {
-  const url = $("url").value.trim();
+async function start() {
+  const input = $("targetUrl");
+  const status = $("status");
+  const url = (input.value || "").trim();
   if (!url) {
-    $("out").textContent = "missing URL";
+    status.textContent = "'url' is required";
     return;
   }
-  $("out").textContent = "Starting…";
+  status.textContent = "Starting…";
   try {
     const r = await fetch("/api/rpa/start", {
       method: "POST",
@@ -14,8 +16,25 @@ $("start").onclick = async () => {
       body: JSON.stringify({ url })
     });
     const data = await r.json();
-    $("out").textContent = JSON.stringify(data, null, 2);
+    if (data.ok) {
+      status.textContent = data.id ? `Started (id ${data.id})` : "Started";
+    } else {
+      const msg = [data.code, data.message || data.error, data.id && `(id ${data.id})`]
+        .filter(Boolean)
+        .join(" ");
+      status.textContent = msg || "Error";
+    }
   } catch (err) {
-    $("out").textContent = JSON.stringify({ ok: false, error: err.message || String(err) }, null, 2);
+    status.textContent = err.message || String(err);
   }
-};
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  const input = $("targetUrl");
+  const startBtn = $("startBtn");
+  const params = new URLSearchParams(window.location.search);
+  const url = params.get("url");
+  input.value = url || "https://example.com";
+  startBtn.addEventListener("click", start);
+  if (url) startBtn.click();
+});
