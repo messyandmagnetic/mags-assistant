@@ -1,37 +1,52 @@
 (() => {
-  const startBtn = document.getElementById('start');
-  const urlInput = document.getElementById('url');
-  const status = document.getElementById('status');
-  const log = (m) => { if (status) status.textContent = m; };
+  const preset = document.querySelector('#presetUrl');
+  const urlInput = document.querySelector('#url');
+  const startBtn = document.querySelector('#start');
+  const runBothBtn = document.querySelector('#runBoth');
+  const out = document.querySelector('#out');
 
-  startBtn?.addEventListener('click', async () => {
-    const url = urlInput?.value || '';
-    log('Starting cloud browser…');
-    try {
-      const res = await fetch('/api/rpa/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) {
-        log('Error: ' + (json.error || res.statusText));
-        return;
+  function show(data) {
+    out.textContent += JSON.stringify(data, null, 2) + '\n';
+  }
+
+  function showErr(err) {
+    out.textContent += 'Error: ' + (err && err.message ? err.message : err) + '\n';
+  }
+
+  preset?.addEventListener('change', () => {
+    urlInput.value = preset.value;
+  });
+
+  startBtn?.addEventListener('click', (e) => {
+    e.preventDefault();
+    out.textContent = '';
+    const url = document.querySelector('#url').value.trim();
+    fetch('/api/rpa/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    })
+      .then((r) => r.json())
+      .then(show)
+      .catch(showErr);
+  });
+
+  runBothBtn?.addEventListener('click', async (e) => {
+    e.preventDefault();
+    out.textContent = '';
+    const vals = Array.from(preset.options).map((o) => o.value);
+    for (const val of vals) {
+      try {
+        const r = await fetch('/api/rpa/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url: val })
+        });
+        const j = await r.json();
+        show(j);
+      } catch (err) {
+        showErr(err);
       }
-      const dest = json.viewerUrl || json.viewerUrlAlt || json.url;
-      if (dest) {
-        const link = document.createElement('a');
-        link.href = dest;
-        link.textContent = 'Open viewer';
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        status.innerHTML = '';
-        status.append('Started. ', link);
-      } else {
-        log('Started.');
-      }
-    } catch (e) {
-      log('Error: ' + e.message);
     }
   });
 })();
