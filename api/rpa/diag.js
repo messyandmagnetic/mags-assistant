@@ -1,14 +1,18 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Content-Type', 'application/json');
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  if (req.method === 'OPTIONS') return res.status(200).end();
+
   const base =
     process.env.BROWSERLESS_BASE || 'https://production-sfo.browserless.io';
-  const key =
-    process.env.BROWSERLESS_TOKEN || process.env.BROWSERLESS_API_KEY || '';
-  const keyPreview = key ? `${key.slice(0, 4)}…${key.slice(-4)}` : null;
-  res.status(200).json({ ok: true, base, haveKey: Boolean(key), keyPreview });
+  const haveKey = Boolean(
+    process.env.BROWSERLESS_TOKEN ||
+      process.env.BROWSERLESS_API_KEY ||
+      process.env.BROWSERLESS_KEY
+  );
+
+  res.status(200).json({ ok: true, base, haveKey });
 }
+
+export const config = { runtime: 'nodejs20.x' };
