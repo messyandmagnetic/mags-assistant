@@ -1,10 +1,19 @@
 # Mags Assistant
 
-Production smoke tests:
+Production domain: https://mags-assistant.vercel.app
 
-- `/` — landing page
-- `/watch` — viewer page (dropdown, text field, Start, Run Both)
-- `/api/hello` → `{ ok:true, hello:"mags" }`
-- `/api/rpa/diag` → shows ok, base, haveKey
-- `/api/rpa/health` → `{ ok:true }` (when Browserless up)
-- `curl -X POST https://mags-assistant.vercel.app/api/rpa/start -H 'Content-Type: application/json' -d '{"url":"https://example.com"}'`
+Test links:
+
+- https://mags-assistant.vercel.app/ — landing page
+- https://mags-assistant.vercel.app/watch — viewer page
+- https://mags-assistant.vercel.app/api/hello
+- https://mags-assistant.vercel.app/api/rpa/diag
+- https://mags-assistant.vercel.app/api/rpa/health
+
+Example curl for start:
+
+```sh
+curl -X POST https://mags-assistant.vercel.app/api/rpa/start \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com"}'
+```
