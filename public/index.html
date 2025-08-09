@@ -15,7 +15,7 @@
       <a class="button rose" href="/api/hello">/api/hello</a>
       <a class="button lav"  href="/api/rpa/health">/api/rpa/health</a>
       <a class="button sage" href="/api/rpa/diag">/api/rpa/diag</a>
-      <a class="button" href="/watch/">Viewer</a>
+      <a class="button" href="/viewer/">Viewer</a>
     </div>
   </div>
 
@@ -82,6 +82,10 @@ function parseCommand(s) {
   if (lower.startsWith('vercel status')) return {type:'agent',action:'vercelDeployStatus',params:{}};
   if (lower.startsWith('list prs')||lower.startsWith('list pr')) return {type:'agent',action:'listOpenPRs',params:{}};
   if (lower.startsWith('create issue')) {const body=pick('body');const title=txt.replace(/create issue/i,'').split('|')[0].trim()||'(no title)';return {type:'agent',action:'createIssue',params:{title,body:body||''}};}
+  if (lower.startsWith('trends today')) return {type:'agent',action:'trendsToday',params:{}};
+  if (lower.startsWith('create project')) {const title=txt.replace(/create project/i,'').trim();return {type:'agent',action:'createProject',params:{title}};}
+  if (lower.startsWith('schedule draft')) {const when=txt.replace(/schedule draft/i,'').trim();return {type:'agent',action:'scheduleDraft',params:{when}};}
+  const replyMatch = txt.match(/reply plan\s+post:(\S+)/i); if (replyMatch) return {type:'agent',action:'replyPlan',params:{postId:replyMatch[1]}};
   if (lower.startsWith('health')) return {type:'agent',action:'healthBundle',params:{}};
   if (lower.startsWith('edit video')) {const theme=pick('theme')||'pastel-script';const overlays=(pick('overlays')||'').split(',').map(s=>s.trim()).filter(Boolean);const url=pick('url');return {type:'video',params:{theme,overlays,ar916:true,captions:true,autoHooks:true,autoSubclips:true,makeThumb:true,url:url||null}};}
   return {type:'agent',action:'healthBundle',params:{}};
