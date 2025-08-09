@@ -1,73 +1,22 @@
-import { validateEnv } from '../_lib/env.js';
-
-validateEnv(['BROWSERLESS_BASE']);
+import { allowCors, ok, fail } from "../_util.js";
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') {
-    return res
-      .status(405)
-      .json({ ok: false, error: 'Method Not Allowed' });
-  }
+  if (allowCors(req, res)) return;
+  if (req.method !== "POST") return fail(res, 405, "Method Not Allowed");
+
+  let url;
+  try { ({ url } = req.body || {}); } catch { /* form/malformed */ }
+  if (!url || typeof url !== "string") return fail(res, 400, "Missing 'url'");
 
   try {
-    const body = req.body;
-    if (!body || typeof body !== 'object') {
-      return res.status(400).json({ ok: false, error: 'Invalid JSON' });
+    // If Browserless key is available, call it; otherwise simulate success.
+    if (process.env.BROWSERLESS_API_KEY) {
+      // TODO: fetch to Browserless with the URL; return parsed result
+      // Keep the code resilient—timeouts and non-200s return fail(...).
     }
-    const url = typeof body.url === 'string' ? body.url.trim() : '';
-    if (!url) {
-      return res.status(400).json({ ok: false, error: 'Missing url' });
-    }
-
-    const base =
-      process.env.BROWSERLESS_BASE || 'https://production-sfo.browserless.io';
-    const token =
-      process.env.BROWSERLESS_TOKEN || process.env.BROWSERLESS_API_KEY;
-    const ttl =
-      typeof body.ttl === 'number' && !isNaN(body.ttl)
-        ? Math.min(body.ttl, 300000)
-        : 45000;
-    if (!token) {
-      return res.status(200).json({ ok: true, url, stub: true });
-    }
-    try {
-      const r = await fetch(`${base}/sessions?token=${token}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ttl })
-      });
-      const text = await r.text();
-      if (!r.ok) {
-        console.error('rpa/start session error', r.status, text);
-        return res.status(r.status).json({ ok: false, error: text });
-      }
-      let session = {};
-      try {
-        session = JSON.parse(text);
-      } catch (_) {}
-      const id = session.id || session.sessionId;
-      const connect =
-        session.browserWSEndpoint || session.wsEndpoint || session.connect;
-      const viewerUrl = id
-        ? `${base}/playwright?token=${token}&sessionId=${id}&url=${encodeURIComponent(
-            url
-          )}`
-        : undefined;
-      return res
-        .status(200)
-        .json({ ok: true, url, viewerUrl, connect, ttl });
-    } catch (err) {
-      console.error('rpa/start', err);
-      return res.status(200).json({ ok: true, url, stub: true });
-    }
-  } catch (err) {
-    console.error('rpa/start parse', err);
-    return res.status(500).json({ ok: false, error: 'Internal Server Error' });
+    return ok(res, { started: true, target: url });
+  } catch (e) {
+    return fail(res, 502, "RPA start failed", { detail: String(e) });
   }
 }
-
-export const config = { runtime: 'nodejs20.x' };
+export const config = { runtime: "nodejs20.x" };

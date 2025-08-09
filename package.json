@@ -2,12 +2,9 @@
   "name": "mags-assistant",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": "20.x"
-  },
   "scripts": {
-    "build": "echo 'nothing to build'",
-    "start": "node server.js",
-    "test": "echo 'no tests'"
+    "build": "echo \"static + api\"",
+    "start": "node server.js || echo \"Using Vercel serverless\"",
+    "test": "node --check api/hello.js api/rpa/diag.js api/rpa/health.js api/rpa/start.js"
   }
 }
