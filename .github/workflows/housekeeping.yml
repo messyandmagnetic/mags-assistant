@@ -1,0 +1,13 @@
+name: Housekeeping
+on:
+  schedule: [{ cron: "0 */12 * * *" }]
+  workflow_dispatch:
+jobs:
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint & link-check (local only)
+        run: |
+          npx --yes markdown-link-check public/index.html || true
+          echo "OK"

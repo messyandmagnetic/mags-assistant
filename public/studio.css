@@ -1,0 +1,7 @@
+#previewWrap{position:relative;max-width:640px;margin:16px auto;background:#000}
+#preview{width:100%;display:block}
+#cropGuide{position:absolute;top:0;left:50%;width:56.25%;height:100%;transform:translateX(-50%);border:2px dashed var(--rose);pointer-events:none}
+#overlayPreview{position:absolute;left:50%;transform:translateX(-50%);bottom:10%;color:#fff;font-size:24px;text-shadow:0 0 4px #000;font-family:Quicksand,system-ui}
+.controls{margin-top:12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.suggestions{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+.suggestions button{border:1px solid var(--smoke);background:#fff;border-radius:999px;padding:6px 12px;cursor:pointer}

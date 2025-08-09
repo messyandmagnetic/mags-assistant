@@ -40,17 +40,8 @@ createServer(async (req, res) => {
   let { pathname } = parse(req.url, true);
   console.log(`${req.method} ${pathname}`);
 
-  if (pathname === '/watch' || pathname.startsWith('/watch/')) {
-    pathname = pathname.replace('/watch', '/viewer');
-  }
-  if (pathname === '/health') {
-    pathname = '/api/health';
-  }
-  if (pathname === '/bootstrap') {
-    pathname = '/api/bootstrap';
-  }
-  if (pathname === '/syncstripe') {
-    pathname = '/api/syncstripe';
+  if (pathname === '/watch') {
+    pathname = '/watch.html';
   }
 
   if (pathname.startsWith('/api/')) {
@@ -72,7 +63,7 @@ createServer(async (req, res) => {
           res.end(JSON.stringify(obj));
         };
       }
-      const mod = await import(`./${pathname.slice(1)}.js`);
+      const mod = await import('./api/router.js');
       await mod.default(req, res);
     } catch (err) {
       console.error('api error', err);

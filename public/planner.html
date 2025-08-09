@@ -1,0 +1,30 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Content Planner</title>
+  <link rel="stylesheet" href="/brand.css">
+</head>
+<body>
+  <div class="container">
+    <h1>Content Planner</h1>
+    <div class="card">
+      <label>Caption ideas<br><textarea id="caption" rows="4" style="width:100%"></textarea></label>
+      <label>Trend link or sound<br><input type="text" id="trend" style="width:100%"></label>
+      <div>
+        <label><input type="checkbox" id="hook"> Hook</label>
+        <label><input type="checkbox" id="cta"> CTA</label>
+        <label><input type="checkbox" id="hashtags"> Hashtags</label>
+        <label><input type="checkbox" id="safety"> Safety check</label>
+      </div>
+      <div class="button-row">
+        <button class="button" id="download">Download JSON</button>
+        <button class="button" id="copy">Copy caption</button>
+      </div>
+    </div>
+    <p><a class="button" href="/">← Home</a></p>
+  </div>
+  <script type="module" src="/planner.js"></script>
+</body>
+</html>
