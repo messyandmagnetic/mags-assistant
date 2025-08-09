@@ -1,0 +1,7 @@
+{
+  "cleanUrls": true,
+  "functions": { "api/**/*": { "runtime": "nodejs20.x" } },
+  "rewrites": [
+    { "source": "/watch", "destination": "/watch.html" }
+  ]
+}
