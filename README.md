@@ -3,6 +3,15 @@
 This is the starter project for your soul-aligned assistant.
 It includes structure for Google API auth, task automation, and third-party integrations.
 
+## Smoke-test links
+- /api/hello
+- /api/rpa/diag
+- /api/rpa/health
+- /api/rpa/start?ttl=45000
+- /watch
+
+Troubleshooting: ensure Vercel envs `BROWSERLESS_BASE`, `BROWSERLESS_API_KEY` (or `BROWSERLESS_TOKEN`) are set in Production; redeploy after changing envs.
+
 ## Environment Variables
 
 The following variables must be configured in Vercel:
@@ -13,9 +22,3 @@ The following variables must be configured in Vercel:
 - `GOOGLE_CLIENT_SECRET`
 - `GOOGLE_REDIRECT_URI`
 - `STRIPE_SECRET_KEY`
-
-## How to test
-
-- GET `/api/rpa/health` → `{ ok: true }`
-- POST `/api/run-command` with `{ "command": "hello" }`
-- Visit `/watch.html?url=https%3A%2F%2Fdashboard.stripe.com%2Flogin`
