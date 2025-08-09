@@ -12,127 +12,22 @@
   <div class="card">
     <h2>Quick checks</h2>
     <div class="button-row">
-      <a class="button rose" href="/api/hello">/api/hello</a>
-      <a class="button lav"  href="/api/rpa/health">/api/rpa/health</a>
-      <a class="button sage" href="/api/rpa/diag">/api/rpa/diag</a>
-      <a class="button" href="/viewer/">Viewer</a>
+      <a class="button rose" href="/hello">/hello</a>
+      <a class="button lav" href="/health">/health</a>
+      <a class="button sage" href="/diag">/diag</a>
+      <a class="button" href="/viewer">Viewer</a>
     </div>
   </div>
 
   <div class="card">
-    <h2>Task Bar</h2>
-    <form id="taskForm">
-      <input id="taskInput" placeholder="Type or speak a command…" />
-      <div style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-        <input type="file" id="taskFile" accept="video/*">
-        <button id="runTask" class="button">Run</button>
-        <button type="button" id="micBtn" class="button">🎤</button>
-      </div>
+    <h2>Start</h2>
+    <form id="watchForm">
+      <input id="url" type="url" placeholder="https://example.com" required>
+      <button class="button">Start</button>
     </form>
-    <div id="presetButtons" style="margin-top:8px;">
-      <button type="button" class="button" data-cmd="ping https://example.com">Ping Example</button>
-      <button type="button" class="button" data-cmd="vercel status">Vercel Status</button>
-      <button type="button" class="button" data-cmd="list prs">List PRs</button>
-      <button type="button" class="button" data-cmd="health bundle">Health Check</button>
-      <button type="button" class="button" data-cmd="edit video theme: pastel-script overlays: sparkles,leaf">Quick Pastel Video</button>
-    </div>
-    <pre id="taskOut"></pre>
-    <p style="opacity:.7">Examples: <code>ping https://example.com</code> · <code>create issue Fix Stripe | body: normalize descriptors</code> · <code>edit video theme: pastel-script overlays: sparkles,leaf</code></p>
-  </div>
-
-  <div class="card">
-    <h2>Video Editor</h2>
-    <form id="videoForm">
-      <input type="file" id="file" accept="video/*">
-      <input type="text" id="title" placeholder="Headline (optional)">
-      <label><input type="checkbox" id="ar916" checked> 9:16</label>
-      <label><input type="checkbox" id="ar11"> 1:1</label>
-      <label><input type="checkbox" id="captions" checked> Auto-captions</label>
-      <label>Theme:
-        <select id="theme">
-          <option value="pastel-script">Pastel Script</option>
-          <option value="chalkboard-cottage">Chalkboard Cottage</option>
-          <option value="wildflower-field">Wildflower Field</option>
-          <option value="minimal-clean">Minimal Clean Pastel</option>
-        </select>
-      </label>
-      <label><input type="checkbox" id="autoHooks" checked> Auto hook trim</label>
-      <label><input type="checkbox" id="autoSubclips" checked> Make highlights</label>
-      <label><input type="checkbox" id="makeThumb" checked> Generate thumbnail</label>
-      <label>Overlays:
-        <select id="overlays" multiple>
-          <option value="sparkles">sparkles</option>
-          <option value="flowers">flowers</option>
-          <option value="leaf">leaf</option>
-          <option value="feather">feather</option>
-          <option value="teacup">teacup</option>
-        </select>
-      </label>
-      <button class="button">Render</button>
-    </form>
-    <pre id="videoOut"></pre>
+    <p id="msg" data-test="result"></p>
   </div>
 </div>
-
-<script>
-function parseCommand(s) {
-  const txt = s.trim(), lower = txt.toLowerCase();
-  const pick = (k)=>{const m=txt.match(new RegExp(`${k}\\s*:\\s*([^|]+)`,'i'));return m?m[1].trim():null};
-  if (lower.startsWith('ping ')) return {type:'agent',action:'pingUrl',params:{url:txt.split(/\\s+/)[1]}};
-  if (lower.startsWith('vercel status')) return {type:'agent',action:'vercelDeployStatus',params:{}};
-  if (lower.startsWith('list prs')||lower.startsWith('list pr')) return {type:'agent',action:'listOpenPRs',params:{}};
-  if (lower.startsWith('create issue')) {const body=pick('body');const title=txt.replace(/create issue/i,'').split('|')[0].trim()||'(no title)';return {type:'agent',action:'createIssue',params:{title,body:body||''}};}
-  if (lower.startsWith('trends today')) return {type:'agent',action:'trendsToday',params:{}};
-  if (lower.startsWith('create project')) {const title=txt.replace(/create project/i,'').trim();return {type:'agent',action:'createProject',params:{title}};}
-  if (lower.startsWith('schedule draft')) {const when=txt.replace(/schedule draft/i,'').trim();return {type:'agent',action:'scheduleDraft',params:{when}};}
-  const replyMatch = txt.match(/reply plan\s+post:(\S+)/i); if (replyMatch) return {type:'agent',action:'replyPlan',params:{postId:replyMatch[1]}};
-  if (lower.startsWith('health')) return {type:'agent',action:'healthBundle',params:{}};
-  if (lower.startsWith('edit video')) {const theme=pick('theme')||'pastel-script';const overlays=(pick('overlays')||'').split(',').map(s=>s.trim()).filter(Boolean);const url=pick('url');return {type:'video',params:{theme,overlays,ar916:true,captions:true,autoHooks:true,autoSubclips:true,makeThumb:true,url:url||null}};}
-  return {type:'agent',action:'healthBundle',params:{}};
-}
-const j=v=>JSON.stringify(v,null,2);
-
-document.getElementById('taskForm').addEventListener('submit', async (e)=>{
-  e.preventDefault(); runTask(parseCommand(document.getElementById('taskInput').value));
-});
-document.getElementById('presetButtons').addEventListener('click',(e)=>{
-  if(e.target.tagName==='BUTTON'){const c=e.target.dataset.cmd;document.getElementById('taskInput').value=c;runTask(parseCommand(c));}
-});
-async function runTask(parsed){
-  const out=document.getElementById('taskOut'); const file=document.getElementById('taskFile').files[0]||null;
-  out.textContent='Running…\n'+j(parsed);
-  try{
-    if(parsed.type==='agent'){
-      const r=await fetch('/api/agent',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:parsed.action,params:parsed.params})});
-      out.textContent=j(await r.json()); return;
-    }
-    if(parsed.type==='video'){
-      const fd=new FormData(); if(file) fd.append('file',file); if(parsed.params.url) fd.append('url',parsed.params.url);
-      fd.append('theme',parsed.params.theme); fd.append('captions',true); fd.append('ar916',true); fd.append('ar11',false);
-      fd.append('autoHooks',true); fd.append('autoSubclips',true); fd.append('makeThumb',true);
-      parsed.params.overlays.forEach(v=>fd.append('overlays[]',v));
-      const r=await fetch('/api/video/edit',{method:'POST',body:fd}); out.textContent=j(await r.json()); return;
-    }
-    out.textContent=j({ok:false,error:'Unknown type'});
-  }catch(e){ out.textContent=j({ok:false,error:String(e)}); }
-}
-// Voice input
-document.getElementById('micBtn').addEventListener('click',()=>{
-  const SR=window.SpeechRecognition||window.webkitSpeechRecognition; if(!SR){alert('Voice not supported');return;}
-  const rec=new SR(); rec.lang='en-US';
-  rec.onresult=(evt)=>{const text=evt.results[0][0].transcript;document.getElementById('taskInput').value=text;runTask(parseCommand(text));};
-  rec.start();
-});
-// Video form submit
-document.getElementById('videoForm').onsubmit=async(e)=>{
-  e.preventDefault(); const fd=new FormData();
-  const f=file.files[0]; if(f) fd.append('file',f);
-  fd.append('title', title.value); fd.append('ar916',ar916.checked); fd.append('ar11',ar11.checked);
-  fd.append('captions',captions.checked); fd.append('theme',theme.value);
-  fd.append('autoHooks',autoHooks.checked); fd.append('autoSubclips',autoSubclips.checked); fd.append('makeThumb',makeThumb.checked);
-  Array.from(overlays.selectedOptions).forEach(o=>fd.append('overlays[]',o.value));
-  videoOut.textContent='Uploading…'; const r=await fetch('/api/video/edit',{method:'POST',body:fd}); videoOut.textContent=j(await r.json());
-};
-</script>
+<script src="/watch.js"></script>
 </body>
 </html>

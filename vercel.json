@@ -1,0 +1,11 @@
+{
+  "redirects": [
+    { "source": "/hello", "destination": "/api/status?route=hello" },
+    { "source": "/health", "destination": "/api/status?route=health" },
+    { "source": "/diag", "destination": "/api/status?route=diag" }
+  ],
+  "rewrites": [
+    { "source": "/watch", "destination": "/watch.html" },
+    { "source": "/viewer", "destination": "/watch.html" }
+  ]
+}
