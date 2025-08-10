@@ -26,18 +26,17 @@ jobs:
         run: |
           set -euo pipefail
           echo "Claiming next job from $API_BASE ..."
-          curl -sS -X POST "$API_BASE/api/queue/claim" \
+          CLAIM_RESP=$(curl -sS -X POST "$API_BASE/api/queue/claim" \
             -H "X-Worker-Key: $WORKER_KEY" \
             -H "content-type: application/json" \
-            -d '{}' | tee job.json
+            -d '{}')
+          echo "$CLAIM_RESP" | tee job.json
 
-          # If job.json has a valid JSON object with an id, export it; else flag NO_JOB
           if jq -e '.id' job.json >/dev/null 2>&1; then
             echo "CLAIMED_ID=$(jq -r '.id' job.json)" >> "$GITHUB_ENV"
             echo "NO_JOB=false" >> "$GITHUB_ENV"
           else
-            echo "No job returned:"
-            cat job.json || true
+            echo "No job returned or invalid JSON"
             echo "NO_JOB=true" >> "$GITHUB_ENV"
           fi
 

@@ -1,7 +1,7 @@
 import { Client } from '@notionhq/client';
 
 export const notion = new Client({ auth: process.env.NOTION_TOKEN! });
-const DB = process.env.NOTION_QUEUE_DB!;
+const DB = process.env.NOTION_QUEUE_DB_ID!;
 
 export function requireEnv(name: string) {
   const v = process.env[name];
@@ -13,27 +13,30 @@ type NotionPage = any;
 
 export async function enqueueTask(input: {
   task: string;
-  type?: string;
-  data?: any;
+  payload?: any;
   runAt?: string | Date;
-  priority?: 'Low' | 'Normal' | 'High';
+  callback?: string;
+  jobId?: string;
 }) {
   const props: any = {
     Task: { title: [{ text: { content: input.task } }] },
     Status: { select: { name: 'Queued' } },
   };
-  if (input.type) props['Type'] = { select: { name: input.type } };
-  if (input.data)
-    props['Data'] = {
+  if (input.payload)
+    props['Payload'] = {
       rich_text: [
-        { text: { content: JSON.stringify(input.data).slice(0, 2000) } },
+        { text: { content: JSON.stringify(input.payload).slice(0, 2000) } },
       ],
     };
   if (input.runAt)
     props['Run At'] = {
       date: { start: new Date(input.runAt).toISOString() },
     };
-  if (input.priority) props['Priority'] = { select: { name: input.priority } };
+  if (input.callback) props['Callback'] = { url: input.callback };
+  if (input.jobId)
+    props['JobId'] = {
+      rich_text: [{ text: { content: String(input.jobId).slice(0, 200) } }],
+    };
 
   const page = await notion.pages.create({
     parent: { database_id: DB },
@@ -59,20 +62,19 @@ export async function claimNextTask(): Promise<NotionPage | null> {
         },
       ],
     },
-    sorts: [
-      { property: 'Priority', direction: 'descending' },
-      { property: 'Run At', direction: 'ascending' },
-    ],
+    sorts: [{ property: 'Run At', direction: 'ascending' }],
     page_size: 1,
   });
   if (!res.results.length) return null;
 
   const page = res.results[0];
+  const attempts = page.properties?.Attempts?.number || 0;
   await notion.pages.update({
     page_id: page.id,
     properties: {
       Status: { select: { name: 'Running' } },
-      'Ran At': { date: { start: new Date().toISOString() } },
+      Locked: { checkbox: true },
+      Attempts: { number: attempts + 1 },
     },
   });
   return page;
@@ -81,7 +83,10 @@ export async function claimNextTask(): Promise<NotionPage | null> {
 export async function completeTask(pageId: string) {
   await notion.pages.update({
     page_id: pageId,
-    properties: { Status: { select: { name: 'Done' } } },
+    properties: {
+      Status: { select: { name: 'Done' } },
+      Locked: { checkbox: false },
+    },
   });
 }
 
@@ -90,7 +95,8 @@ export async function failTask(pageId: string, message: string) {
     page_id: pageId,
     properties: {
       Status: { select: { name: 'Failed' } },
-      'Last Error': {
+      Locked: { checkbox: false },
+      Error: {
         rich_text: [
           { text: { content: message.slice(0, 1900) } },
         ],
@@ -103,18 +109,21 @@ export function readTask(page: any) {
   const props: any = page.properties;
   const val = (key: string) => props[key];
   const text = (key: string) => (val(key)?.rich_text?.[0]?.plain_text ?? '').trim();
-  const select = (key: string) => val(key)?.select?.name ?? null;
   const title = (val('Task')?.title?.[0]?.plain_text ?? '').trim();
 
-  let data: any = undefined;
+  let payload: any = undefined;
   try {
-    data = text('Data') ? JSON.parse(text('Data')) : undefined;
+    payload = text('Payload') ? JSON.parse(text('Payload')) : undefined;
   } catch {}
 
   return {
     id: page.id,
     task: title,
-    type: select('Type') ?? 'ops',
-    data,
+    payload,
+    callback: val('Callback')?.url || undefined,
+    jobId: text('JobId') || undefined,
+    attempts: val('Attempts')?.number || 0,
+    locked: val('Locked')?.checkbox || false,
+    error: text('Error') || undefined,
   };
 }

@@ -57,6 +57,69 @@ export default async function handler(req, res) {
       });
     }
 
+    // ===== Admin: create Notion queue DB =====
+    if (pathname === '/api/admin/create-notion-queue' && method === 'POST') {
+      const key = req.headers['x-mags-key'];
+      if (!key || key !== env.WORKER_KEY) return bad(res, 'Unauthorized', 401);
+      const parent = env.MAGS_NOTION_ROOT_PAGE_ID || env.NOTION_HQ_PAGE_ID;
+      if (!parent) return bad(res, 'Missing MAGS_NOTION_ROOT_PAGE_ID', 500);
+      try {
+        const db = await notion.databases.create({
+          parent: { page_id: parent },
+          title: [{ type: 'text', text: { content: 'Mags Queue' } }],
+          properties: {
+            Task: { title: {} },
+            Status: {
+              select: {
+                options: [
+                  { name: 'Queued' },
+                  { name: 'Running' },
+                  { name: 'Done' },
+                  { name: 'Failed' },
+                ],
+              },
+            },
+            Payload: { rich_text: {} },
+            'Run At': { date: {} },
+            Callback: { url: {} },
+            JobId: { rich_text: {} },
+            Attempts: { number: {} },
+            Locked: { checkbox: {} },
+            Error: { rich_text: {} },
+          },
+        });
+        console.log('Created Notion queue DB', db.id);
+        let seed = null;
+        try {
+          seed = await notion.pages.create({
+            parent: { database_id: db.id },
+            properties: {
+              Task: { title: [{ text: { content: 'Hello world' } }] },
+              Status: { select: { name: 'Queued' } },
+              Payload: {
+                rich_text: [
+                  { text: { content: JSON.stringify({ type: 'hello' }) } },
+                ],
+              },
+            },
+          });
+        } catch {}
+        return ok(res, {
+          databaseId: db.id,
+          seedJobId: seed?.id,
+          todo: 'Set NOTION_QUEUE_DB_ID in Vercel & GitHub Secrets to persist.',
+        });
+      } catch (e) {
+        if (e.code === 'insufficient_permissions') {
+          const msg =
+            'Notion insufficient permissions: add the integration to the HQ page via Connections → add "Mags Assistant"';
+          console.error(msg);
+          return bad(res, msg);
+        }
+        throw e;
+      }
+    }
+
     // existing rpa/start endpoint
     if (pathname === '/api/rpa/start') {
       if (method === 'POST') {
@@ -83,6 +146,8 @@ export default async function handler(req, res) {
     // ===== Queue: enqueue task =====
     if (pathname === '/api/queue/enqueue' && method === 'POST') {
       if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+      if (!env.NOTION_QUEUE_DB_ID)
+        return bad(res, 'Missing NOTION_QUEUE_DB_ID');
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       if (!body.task) return bad(res, 'Missing task');
       const page = await enqueueTask(body);
@@ -92,6 +157,8 @@ export default async function handler(req, res) {
     // ===== Queue: claim =====
     if (pathname === '/api/queue/claim' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      if (!env.NOTION_QUEUE_DB_ID)
+        return bad(res, 'Missing NOTION_QUEUE_DB_ID');
       const page = await claimNextTask();
       if (!page) return ok(res, { empty: true });
       return ok(res, readTask(page));
@@ -100,6 +167,8 @@ export default async function handler(req, res) {
     // ===== Queue: complete =====
     if (pathname === '/api/queue/complete' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      if (!env.NOTION_QUEUE_DB_ID)
+        return bad(res, 'Missing NOTION_QUEUE_DB_ID');
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       if (!body.id) return bad(res, 'Missing id');
       await completeTask(body.id);
@@ -109,6 +178,8 @@ export default async function handler(req, res) {
     // ===== Queue: fail =====
     if (pathname === '/api/queue/fail' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      if (!env.NOTION_QUEUE_DB_ID)
+        return bad(res, 'Missing NOTION_QUEUE_DB_ID');
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       if (!body.id) return bad(res, 'Missing id');
       await failTask(body.id, body.error || 'error');
