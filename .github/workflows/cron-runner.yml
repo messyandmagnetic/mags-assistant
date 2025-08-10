@@ -1,53 +1,58 @@
 name: mags-cron
+
 on:
-  schedule: [{ cron: "*/10 * * * *" }]
+  schedule:
+    - cron: "*/10 * * * *"   # run every 10 minutes
   workflow_dispatch: {}
   repository_dispatch:
     types: [mags-run-queue]
 
+permissions:
+  contents: read
+
 jobs:
   run-queue:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
     steps:
-      - name: Claim next job
-        id: claim
-        env:
-          API_BASE: https://mags-assistant.vercel.app
-          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+      - name: Install tools
         run: |
-          set -e
-          curl -fsS -X POST "$API_BASE/api/queue/next" \
+          sudo apt-get update -y
+          sudo apt-get install -y jq curl
+
+      - name: Claim next job
+        env:
+          API_BASE: ${{ secrets.API_BASE }}           # e.g. https://mags-assistant.vercel.app
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}       # same shared key your API expects in X-Worker-Key
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "$API_BASE/api/queue/claim" \
             -H "X-Worker-Key: $WORKER_KEY" \
             -H "content-type: application/json" \
-            -o job.json
+            -o job.json || echo '{}' > job.json
           cat job.json
 
-      - name: Process job
-        if: ${{ hashFiles('job.json') != '' }}
-        env:
-          API_BASE: https://mags-assistant.vercel.app
-          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+      - name: Exit if no job
         run: |
-          set -e
+          jq -e '.jobId' job.json >/dev/null || { echo "No job available"; exit 0; }
+
+      - name: Run job
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+        run: |
           curl -fsS -X POST "$API_BASE/api/queue/run" \
-            -H "X-Worker-Key: $WORKER_KEY" \
             -H "content-type: application/json" \
             --data-binary @job.json
 
-      - name: Log success
-        if: ${{ success() }}
-        run: echo "Mags queue run OK at $(date -u)"
-
-      - name: On failure notify
-        if: ${{ failure() }}
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.ALERT_EMAIL_USER }}
-          password: ${{ secrets.ALERT_EMAIL_PASS }}
-          subject: "Mags queue failure"
-          to: ${{ secrets.ALERT_TO }}
-          from: "mags@messyandmagnetic.com"
-          body: "Check GitHub Actions logs."
+      - name: Complete job
+        if: always()
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+        run: |
+          JOB_ID=$(jq -r '.jobId // empty' job.json)
+          if [ -n "$JOB_ID" ]; then
+            curl -fsS -X POST "$API_BASE/api/queue/complete" \
+              -H "X-Worker-Key: $WORKER_KEY" \
+              -H "content-type: application/json" \
+              --data-binary @job.json || true
+          fi
