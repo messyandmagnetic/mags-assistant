@@ -2,18 +2,19 @@ import { notion, requireEnv } from '../lib/notion.js';
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
 import { claimJob, runJob, completeJob } from './queue.js';
+import { env } from '../lib/env.js';
 
 function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
 function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
 
 function checkKey(req) {
   const k = req.headers['x-mags-key'] || new URL(req.url, 'http://x').searchParams.get('key');
-  return k && process.env.MAGS_KEY && k === process.env.MAGS_KEY;
+  return k && env.MAGS_KEY && k === env.MAGS_KEY;
 }
 
 function checkWorker(req) {
   const k = req.headers['x-worker-key'] || new URL(req.url, 'http://x').searchParams.get('key');
-  return k && process.env.WORKER_KEY && k === process.env.WORKER_KEY;
+  return k && env.WORKER_KEY && k === env.WORKER_KEY;
 }
 
 export const config = { runtime: 'nodejs' };
@@ -30,10 +31,21 @@ export default async function handler(req, res) {
     if (pathname === '/api/rpa/diag') {
       return ok(res, {
         haveKeys: {
-          notion: !!process.env.NOTION_TOKEN,
-          db: !!process.env.NOTION_DATABASE_ID,
-          inbox: !!process.env.NOTION_INBOX_PAGE_ID,
-          hq: !!process.env.NOTION_HQ_PAGE_ID,
+          notion: !!env.NOTION_TOKEN,
+          db: !!env.NOTION_DATABASE_ID,
+          inbox: !!env.NOTION_INBOX_PAGE_ID,
+          hq: !!env.NOTION_HQ_PAGE_ID,
+        },
+      });
+    }
+
+    if (pathname === '/api/env/summary') {
+      return ok(res, {
+        haveKeys: {
+          notion: !!env.NOTION_TOKEN,
+          db: !!env.NOTION_DATABASE_ID,
+          inbox: !!env.NOTION_INBOX_PAGE_ID,
+          hq: !!env.NOTION_HQ_PAGE_ID,
         },
       });
     }
@@ -49,7 +61,7 @@ export default async function handler(req, res) {
         } catch {
           return bad(res, "'url' is required");
         }
-        if (process.env.BROWSERLESS_API_KEY) {
+        if (env.BROWSERLESS_API_KEY) {
           // await fetch(...)
         }
         return ok(res, {
@@ -222,7 +234,7 @@ export default async function handler(req, res) {
 
     // ===== Notion: Inbox notes (page) =====
     if (pathname.startsWith('/api/notion/notes')) {
-      const pageId = process.env.NOTION_INBOX_PAGE_ID;
+      const pageId = env.NOTION_INBOX_PAGE_ID;
       if (!pageId) return bad(res, 'No NOTION_INBOX_PAGE_ID set', 501);
 
       if (method === 'POST') {
