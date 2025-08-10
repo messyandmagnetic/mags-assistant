@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Contact - Mags</title>
+  <meta name="description" content="Contact us" />
+  <link rel="canonical" href="https://mags-assistant.vercel.app/site/contact/" />
+  <meta property="og:title" content="Contact - Mags" />
+  <meta property="og:description" content="Contact us" />
+  <meta property="og:url" content="https://mags-assistant.vercel.app/site/contact/" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="stylesheet" href="/brand.css" />
+</head>
+<body>
+  <h1>Contact</h1>
+  <form action="mailto:hello@example.com" method="post" enctype="text/plain">
+    <label>Email: <input type="email" name="email" required></label>
+    <label>Message: <textarea name="message" required></textarea></label>
+    <button type="submit">Send</button>
+  </form>
+  <button onclick="navigator.clipboard.writeText('hello@example.com')">Copy email</button>
+</body>
+</html>
