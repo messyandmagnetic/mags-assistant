@@ -9,6 +9,7 @@ Test links:
 - https://mags-assistant.vercel.app/hello
 - https://mags-assistant.vercel.app/diag
 - https://mags-assistant.vercel.app/health
+- https://mags-assistant.vercel.app/console — simple command console
 
 Example curl for start:
 
