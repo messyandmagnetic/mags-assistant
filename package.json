@@ -8,6 +8,6 @@
     "test": "node --check api/router.js"
   },
   "dependencies": {
-    "@notionhq/client": "^2.2.6"
+    "@notionhq/client": "^2.2.15"
   }
 }

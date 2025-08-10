@@ -25,6 +25,7 @@ export default async function handler(req, res) {
           notion: !!process.env.NOTION_TOKEN,
           db: !!process.env.NOTION_DATABASE_ID,
           inbox: !!process.env.NOTION_INBOX_PAGE_ID,
+          hq: !!process.env.NOTION_HQ_PAGE_ID,
         },
       });
     }
@@ -54,6 +55,43 @@ export default async function handler(req, res) {
 
     // secure endpoints
     if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+
+    // ===== HQ: list children =====
+    if (pathname.startsWith('/api/notion/hq/children') && method === 'GET') {
+      const pageId = requireEnv('NOTION_HQ_PAGE_ID');
+      const r = await notion.blocks.children.list({ block_id: pageId, page_size: 100 });
+      return ok(res, { results: r.results });
+    }
+
+    // ===== HQ: create subpage =====
+    if (pathname.startsWith('/api/notion/hq/subpage') && method === 'POST') {
+      const pageId = requireEnv('NOTION_HQ_PAGE_ID');
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const title = body.title || 'New Subpage';
+      const page = await notion.pages.create({
+        parent: { page_id: pageId },
+        properties: { title: [{ type: 'text', text: { content: title } }] },
+      });
+      return ok(res, { id: page.id, title });
+    }
+
+    // ===== HQ: append note =====
+    if (pathname.startsWith('/api/notion/hq/note') && method === 'POST') {
+      const pageId = requireEnv('NOTION_HQ_PAGE_ID');
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const text = body.text || 'Note from Mags';
+      await notion.blocks.children.append({
+        block_id: pageId,
+        children: [
+          {
+            paragraph: {
+              rich_text: [{ type: 'text', text: { content: text } }],
+            },
+          },
+        ],
+      });
+      return ok(res, { appended: true });
+    }
 
     // ===== Notion: Tasks (database) =====
     if (pathname.startsWith('/api/notion/tasks')) {
