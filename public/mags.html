@@ -15,13 +15,17 @@
   <script type="module">
     import React from 'https://esm.sh/react@18';
     import { createRoot } from 'https://esm.sh/react-dom@18/client';
+    import MagsVoicePanel from '../components/MagsVoicePanel.jsx';
     import MagsNotionPanel from '../components/MagsNotionPanel.jsx';
     import MagsHQPanel from '../components/MagsHQPanel.jsx';
+    import MagsRunsPanel from '../components/MagsRunsPanel.jsx';
     const magsKey = localStorage.getItem('magsKey') || '';
     createRoot(document.getElementById('panel')).render(
       React.createElement(React.Fragment, null,
+        React.createElement(MagsVoicePanel, { magsKey }),
         React.createElement(MagsNotionPanel, { magsKey }),
-        React.createElement(MagsHQPanel, { magsKey })
+        React.createElement(MagsHQPanel, { magsKey }),
+        React.createElement(MagsRunsPanel, { magsKey })
       )
     );
   </script>

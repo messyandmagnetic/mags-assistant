@@ -1,4 +1,6 @@
 import { notion, requireEnv } from '../lib/notion.js';
+import { planFromText } from '../lib/agent/planner.js';
+import { runPlan } from '../lib/agent/executor.js';
 
 function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
 function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
@@ -55,6 +57,55 @@ export default async function handler(req, res) {
 
     // secure endpoints
     if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+
+    // ===== Agent: plan from text =====
+    if (pathname === '/api/agent/plan' && method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const { text } = body;
+      if (!text) return bad(res, 'Missing text');
+      const plan = planFromText(text);
+      return ok(res, { plan });
+    }
+
+    // ===== Agent: command from text =====
+    if (pathname === '/api/agent/command' && method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const { text } = body;
+      if (!text) return bad(res, 'Missing text');
+      const plan = planFromText(text);
+      const { runId } = await runPlan(plan, { text });
+      return ok(res, { jobId: runId });
+    }
+
+    // ===== Agent: run explicit plan =====
+    if (pathname === '/api/agent/run' && method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const { plan, text = '' } = body;
+      if (!plan) return bad(res, 'Missing plan');
+      const { runId } = await runPlan(plan, { text });
+      return ok(res, { jobId: runId });
+    }
+
+    // ===== Agent: list jobs =====
+    if (pathname === '/api/agent/jobs' && method === 'GET') {
+      const db = requireEnv('NOTION_DB_RUNS_ID');
+      const r = await notion.databases.query({ database_id: db, page_size: 20, sorts: [{ property: 'Started', direction: 'descending' }] });
+      return ok(res, { results: r.results });
+    }
+
+    // ===== Agent: logs =====
+    if (pathname === '/api/agent/logs' && method === 'GET') {
+      const id = new URL(req.url, 'http://x').searchParams.get('id');
+      if (!id) return bad(res, 'Missing id');
+      const page = await notion.pages.retrieve({ page_id: id });
+      const result = page.properties?.Result?.rich_text?.map(r => r.plain_text).join('\n') || '';
+      return ok(res, { result });
+    }
+
+    // ===== Stripe sync stub =====
+    if (pathname === '/api/stripe/sync' && method === 'POST') {
+      return ok(res, { synced: false, message: 'Not implemented' });
+    }
 
     // ===== HQ: list children =====
     if (pathname.startsWith('/api/notion/hq/children') && method === 'GET') {
