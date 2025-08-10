@@ -3,6 +3,7 @@
     { "src": "/api/(.*)", "dest": "/api/router.js" },
     { "src": "/watch", "dest": "/watch.html" },
     { "src": "/studio", "dest": "/studio.html" },
-    { "src": "/planner", "dest": "/planner.html" }
+    { "src": "/planner", "dest": "/planner.html" },
+    { "src": "/mags", "dest": "/mags.html" }
   ]
 }

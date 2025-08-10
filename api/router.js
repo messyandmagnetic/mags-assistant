@@ -1,65 +1,132 @@
-import { cors, ok, fail, json } from "../lib/http.js";
+import { notion, requireEnv } from '../lib/notion.js';
 
-export const config = { runtime: "nodejs" };
+function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
+function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
+
+function checkKey(req) {
+  const k = req.headers['x-mags-key'] || new URL(req.url, 'http://x').searchParams.get('key');
+  return k && process.env.MAGS_KEY && k === process.env.MAGS_KEY;
+}
+
+export const config = { runtime: 'nodejs' };
 
 export default async function handler(req, res) {
-  console.log(`${req.method} ${req.url}`);
+  const { method, url } = req;
+  console.log(`${method} ${url}`);
   try {
-    if (cors(req, res)) return;
-    const { pathname } = new URL(req.url, `http://${req.headers.host}`);
-    const route = `${req.method} ${pathname}`;
-    switch (route) {
-      case "GET /api/hello":
-        return ok(res);
-      case "HEAD /api/rpa/health":
-        res.status(200).end();
-        return;
-      case "GET /api/rpa/health":
-        return ok(res, { status: 200 });
-      case "GET /api/rpa/diag": {
-        const baseUrl = `https://${req.headers.host}`;
-        const haveKeys = {
-          openai: Boolean(process.env.OPENAI_API_KEY),
-          shotstack: Boolean(process.env.SHOTSTACK_API_KEY),
-          blob: Boolean(process.env.BLOB_READ_WRITE_TOKEN),
-        };
-        return ok(res, { baseUrl, haveKeys });
-      }
-      case "POST /api/rpa/start": {
-        const body = req.body && typeof req.body === "object" ? req.body : {};
-        const url = typeof body.url === "string" ? body.url.trim() : "";
+    const { pathname } = new URL(url, `http://${req.headers.host}`);
+
+    // health / diag
+    if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
+    if (pathname === '/api/rpa/health') return ok(res, {});
+    if (pathname === '/api/rpa/diag') {
+      return ok(res, {
+        haveKeys: {
+          notion: !!process.env.NOTION_TOKEN,
+          db: !!process.env.NOTION_DATABASE_ID,
+          inbox: !!process.env.NOTION_INBOX_PAGE_ID,
+        },
+      });
+    }
+
+    // existing rpa/start endpoint
+    if (pathname === '/api/rpa/start') {
+      if (method === 'POST') {
+        const body = req.body && typeof req.body === 'object' ? req.body : {};
+        const target = typeof body.url === 'string' ? body.url.trim() : '';
         try {
-          if (!url) throw new Error("missing");
-          new URL(url);
+          if (!target) throw new Error('missing');
+          new URL(target);
         } catch {
-          return json(res, 200, {
-            ok: false,
-            code: "BAD_REQUEST",
-            message: "'url' is required",
-          });
+          return bad(res, "'url' is required");
         }
         if (process.env.BROWSERLESS_API_KEY) {
           // await fetch(...)
         }
-        return json(res, 200, {
-          ok: true,
+        return ok(res, {
           started: true,
-          url,
+          url: target,
           jobId: Math.random().toString(36).slice(2, 8),
         });
       }
-      case "GET /api/rpa/start":
-      case "HEAD /api/rpa/start":
-        return json(res, 405, {
-          ok: false,
-          code: "METHOD_NOT_ALLOWED",
-          message: "Method not allowed",
-        });
-      default:
-        return fail(res, 404, "Not found");
+      return bad(res, 'Method not allowed', 405);
     }
-  } catch (err) {
-    console.error(err);
-    return fail(res, 500, err.message || "Internal error");
+
+    // secure endpoints
+    if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+
+    // ===== Notion: Tasks (database) =====
+    if (pathname.startsWith('/api/notion/tasks')) {
+      const databaseId = requireEnv('NOTION_DATABASE_ID');
+
+      if (method === 'GET') {
+        const r = await notion.databases.query({
+          database_id: databaseId,
+          page_size: 50,
+          sorts: [{ property: 'Created', direction: 'descending' }].filter(Boolean),
+        });
+        return ok(res, { count: r.results.length, results: r.results });
+      }
+
+      if (method === 'POST') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+        const { title, status = 'Todo', notes = '' } = body;
+        if (!title) return bad(res, 'Missing title');
+        const props = {
+          Name: { title: [{ text: { content: title } }] },
+        };
+        if (notes) props['Notes'] = { rich_text: [{ text: { content: notes } }] };
+        if (status) props['Status'] = { status: { name: status } };
+        const page = await notion.pages.create({
+          parent: { database_id: databaseId },
+          properties: props,
+        });
+        return ok(res, { id: page.id });
+      }
+
+      if (method === 'PATCH') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+        const { id, status, title, notes } = body;
+        if (!id) return bad(res, 'Missing id');
+        const props = {};
+        if (title) props['Name'] = { title: [{ text: { content: title } }] };
+        if (status) props['Status'] = { status: { name: status } };
+        if (notes !== undefined) props['Notes'] = { rich_text: [{ text: { content: notes } }] };
+        await notion.pages.update({ page_id: id, properties: props });
+        return ok(res, { id });
+      }
+
+      return bad(res, 'Method not allowed', 405);
+    }
+
+    // ===== Notion: Inbox notes (page) =====
+    if (pathname.startsWith('/api/notion/notes')) {
+      const pageId = process.env.NOTION_INBOX_PAGE_ID;
+      if (!pageId) return bad(res, 'No NOTION_INBOX_PAGE_ID set', 501);
+
+      if (method === 'POST') {
+        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+        const { text } = body;
+        if (!text) return bad(res, 'Missing text');
+        await notion.blocks.children.append({
+          block_id: pageId,
+          children: [
+            {
+              paragraph: {
+                rich_text: [{ type: 'text', text: { content: text } }],
+              },
+            },
+          ],
+        });
+        return ok(res, { appended: true });
+      }
+
+      return bad(res, 'Method not allowed', 405);
+    }
+
+    return bad(res, 'Not found', 404);
+  } catch (e) {
+    console.error(e);
+    return bad(res, e.message || 'Server error', 500);
   }
 }
