@@ -49,9 +49,10 @@ export default function ChatUI() {
   }
 
   const quick = [
-    'Sync Stripe products with Notion tracker',
-    'Generate DALL·E product image in brand style and attach to Stripe + Notion',
-    'Audit tax/advanced settings for all Stripe products',
+    { label: 'Sync Stripe \u2194 Notion', prompt: 'Sync Stripe and Notion (two-way)' },
+    { label: 'Generate product image', prompt: 'Generate on-brand image for selected product' },
+    { label: 'Audit Stripe products', prompt: 'Audit Stripe products and propose fixes' },
+    { label: 'Create Notion task', prompt: 'Create a Notion task from this chat' },
   ];
 
   return (
@@ -59,7 +60,10 @@ export default function ChatUI() {
       <div ref={listRef} className="flex-1 overflow-y-auto p-4 space-y-2">
         {messages.map((m, i) => (
           <div key={i} className={m.role === 'user' ? 'text-right' : ''}>
-            <div className="inline-block rounded px-2 py-1 bg-gray-200 whitespace-pre-wrap">
+            <div
+              className="inline-block rounded px-3 py-2 whitespace-pre-wrap shadow-sm"
+              style={{ background: m.role === 'user' ? '#FBF6EF' : '#9BB5A3', color: '#2B2B2B' }}
+            >
               {m.content}
             </div>
           </div>
@@ -69,13 +73,14 @@ export default function ChatUI() {
       <div className="p-2 border-t">
         <div className="flex gap-2 mb-2 overflow-x-auto">
           {quick.map((q) => (
-            <button key={q} onClick={() => send(q)} className="text-sm px-2 py-1 border rounded">
-              {q}
+            <button
+              key={q.label}
+              onClick={() => send(q.prompt)}
+              className="text-sm px-2 py-1 border rounded"
+            >
+              {q.label}
             </button>
           ))}
-          <button onClick={() => send('/hello')} className="text-sm px-2 py-1 border rounded">
-            Run test
-          </button>
         </div>
         <textarea
           className="w-full border rounded p-2 resize-none focus:outline-none"
@@ -91,7 +96,8 @@ export default function ChatUI() {
         />
         <button
           onClick={() => send()}
-          className="mt-2 px-4 py-1 bg-black text-white rounded"
+          className="mt-2 px-4 py-1 rounded"
+          style={{ background: '#D8B26E', color: '#2B2B2B' }}
           disabled={loading}
         >
           Send
