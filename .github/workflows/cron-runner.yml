@@ -22,30 +22,57 @@ jobs:
           sudo apt-get install -y jq curl
 
       - name: Claim next job
+        shell: bash
         run: |
-          set -e
-          JOB=$(curl -s -X POST "$API_BASE/api/queue/claim" -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json")
-          echo "$JOB" | tee job.json
-          if grep -q '"empty":true' job.json; then
-            echo "No jobs"; exit 0
+          set -euo pipefail
+          echo "Claiming next job from $API_BASE ..."
+          curl -sS -X POST "$API_BASE/api/queue/claim" \
+            -H "X-Worker-Key: $WORKER_KEY" \
+            -H "content-type: application/json" \
+            -d '{}' | tee job.json
+
+          # If job.json has a valid JSON object with an id, export it; else flag NO_JOB
+          if jq -e '.id' job.json >/dev/null 2>&1; then
+            echo "CLAIMED_ID=$(jq -r '.id' job.json)" >> "$GITHUB_ENV"
+            echo "NO_JOB=false" >> "$GITHUB_ENV"
+          else
+            echo "No job returned:"
+            cat job.json || true
+            echo "NO_JOB=true" >> "$GITHUB_ENV"
           fi
 
       - name: Run job
+        if: env.NO_JOB == 'false'
+        shell: bash
         run: |
-          set -e
-          curl -s -X POST "$API_BASE/api/run" \
-            -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" \
+          set -euo pipefail
+          echo "Running job $CLAIMED_ID ..."
+          curl -sS -X POST "$API_BASE/api/queue/run" \
+            -H "X-Worker-Key: $WORKER_KEY" \
+            -H "content-type: application/json" \
             --data-binary @job.json | tee run.json
 
       - name: Mark complete
-        if: success()
+        if: env.NO_JOB == 'false'
+        shell: bash
         run: |
-          ID=$(jq -r '.id' job.json)
-          curl -s -X POST "$API_BASE/api/queue/complete" -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" --data "{\"id\":\"$ID\"}"
+          set -euo pipefail
+          ID="$CLAIMED_ID"
+          curl -sS -X POST "$API_BASE/api/queue/complete" \
+            -H "X-Worker-Key: $WORKER_KEY" \
+            -H "content-type: application/json" \
+            -d "{\"id\":\"$ID\"}"
 
       - name: Mark failed
-        if: failure()
+        if: env.NO_JOB == 'false' && failure()
+        shell: bash
         run: |
-          ID=$(jq -r '.id' job.json)
-          ERR=$(cat run.json 2>/dev/null || echo "runner failed")
-          curl -s -X POST "$API_BASE/api/queue/fail" -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" --data "{\"id\":\"$ID\",\"error\":${ERR@Q}}"
+          set -euo pipefail
+          ID="$CLAIMED_ID"
+          ERR="$(cat run.json 2>/dev/null || echo 'runner failed')"
+          curl -sS -X POST "$API_BASE/api/queue/fail" \
+            -H "X-Worker-Key: $WORKER_KEY" \
+            -H "content-type: application/json" \
+            -d "{\"id\":\"$ID\",\"error\":$(
+              jq -Rs '.' <<<"$ERR"
+            )}"
