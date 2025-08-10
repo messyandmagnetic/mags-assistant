@@ -15,6 +15,8 @@
       <a class="button rose" href="/api/hello">/api/hello</a>
       <a class="button lav" href="/api/rpa/health">/api/rpa/health</a>
       <a class="button sage" href="/api/rpa/diag">/api/rpa/diag</a>
+      <a class="button" data-ping href="/api/notion/diag">/api/notion/diag</a>
+      <a class="button" data-ping href="/api/cron/tick?dry=1">/api/cron/tick?dry=1</a>
       <a class="button" href="/watch">Viewer</a>
     </div>
   </div>
@@ -36,6 +38,22 @@
     </div>
   </div>
 </div>
+<script>
+(function(){
+  async function ping(btn){
+    try {
+      const r = await fetch(btn.getAttribute('href'));
+      const j = await r.json().catch(() => ({}));
+      if (j.ok) {
+        btn.classList.add('sage');
+        btn.style.background = 'var(--sage)';
+        btn.style.color = '#fff';
+      }
+    } catch {}
+  }
+  document.querySelectorAll('[data-ping]').forEach(ping);
+})();
+</script>
 <script src="/watch.js"></script>
 </body>
 </html>
