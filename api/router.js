@@ -7,6 +7,8 @@ import {
   failTask,
   queueHealth,
   readTask,
+  ensureQueueDb,
+  enqueueJob,
 } from '../lib/notion.js';
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
@@ -107,14 +109,60 @@ export default async function handler(req, res) {
       return ok(res, { id: jobId, pageId: page?.id ?? null });
     }
 
-    // ===== Queue: seed =====
+    // ===== Queue: seed job queue =====
     if (pathname === '/api/queue/seed' && method === 'POST') {
-      if (req.headers['x-mags-key'] !== env.MAGS_KEY) return bad(res, 'Unauthorized', 401);
-      if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
-      const jobId = `job_${Date.now()}`;
-      const payload = { hello: 'world', ts: new Date().toISOString() };
-      const page = await enqueueTask({ jobId, payload });
-      return ok(res, { id: jobId, pageId: page?.id ?? null, seeded: true });
+      if (req.headers['x-mags-key'] !== env.CRON_SECRET)
+        return bad(res, 'Unauthorized', 401);
+      const parentPageId = env.NOTION_HQ_PAGE_ID;
+      if (!parentPageId) return bad(res, 'Missing NOTION_HQ_PAGE_ID');
+      const { databaseId } = await ensureQueueDb({ parentPageId });
+
+      if (!env.NOTION_QUEUE_DB) {
+        try {
+          if (process.env.VERCEL_PROJECT_ID && process.env.VERCEL_API_TOKEN) {
+            await fetch(
+              `https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}/env`,
+              {
+                method: 'POST',
+                headers: {
+                  Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  key: 'NOTION_QUEUE_DB',
+                  value: databaseId,
+                  target: ['production', 'preview', 'development'],
+                }),
+              }
+            );
+          }
+          process.env.NOTION_QUEUE_DB = databaseId;
+        } catch (e) {
+          console.error('Failed to set Vercel env', e);
+        }
+      }
+
+      const parameters = `Update all Stripe product images and advanced settings to the final Messy & Magnetic branding.
+
+Tasks:
+1) Fix incomplete descriptions using “MM Site Content” in Notion.
+2) Upload final product images from the brand folder.
+3) Ensure advanced settings are correct for each product (metadata keys, unit label, tax behavior, shippable flags if any, statement descriptor where needed).
+4) Set up donation products and link to correct price IDs (one‑time + monthly).
+5) Normalize naming, descriptions, and visibility to match the approved product templates in Notion.
+Output:
+- List of product IDs updated
+- Any products skipped with reason
+- Links to new images
+`;
+
+      const { id: jobId } = await enqueueJob({
+        databaseId,
+        name: 'Update Stripe Products & Donations',
+        parameters,
+      });
+
+      return ok(res, { databaseId, jobId });
     }
 
     // ===== Queue: claim =====

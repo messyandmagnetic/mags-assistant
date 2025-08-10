@@ -49,3 +49,21 @@ Automated jobs are processed by a GitHub Actions workflow located at `.github/wo
 - **Endpoints:** the runner claims jobs from `/api/queue/claim`, runs them via `/api/queue/run`, and marks them done with `/api/queue/complete`.
 
 The current schedule runs every 10 minutes.
+
+## Maggie Job Queue
+
+Automated jobs for Maggie are tracked in a Notion database named **Maggie Job Queue** under the HQ page.
+
+### Required environment variables
+
+- `NOTION_TOKEN` – Notion internal integration token
+- `NOTION_HQ_PAGE_ID` – parent page where the queue database lives
+- `NOTION_QUEUE_DB` – database ID of "Maggie Job Queue" (created on first seed)
+
+### Reseed
+
+To recreate the database and seed the initial job, call:
+
+```sh
+curl -X POST "$API_BASE/api/queue/seed" -H "x-mags-key: $CRON_SECRET"
+```
