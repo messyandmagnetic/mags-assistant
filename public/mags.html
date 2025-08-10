@@ -17,11 +17,13 @@
     import { createRoot } from 'https://esm.sh/react-dom@18/client';
     import MagsNotionPanel from '../components/MagsNotionPanel.jsx';
     import MagsHQPanel from '../components/MagsHQPanel.jsx';
+    import MagsQueuePanel from '../components/MagsQueuePanel.jsx';
     const magsKey = localStorage.getItem('magsKey') || '';
     createRoot(document.getElementById('panel')).render(
       React.createElement(React.Fragment, null,
         React.createElement(MagsNotionPanel, { magsKey }),
-        React.createElement(MagsHQPanel, { magsKey })
+        React.createElement(MagsHQPanel, { magsKey }),
+        React.createElement(MagsQueuePanel, { magsKey })
       )
     );
   </script>

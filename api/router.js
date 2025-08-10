@@ -1,4 +1,5 @@
 import { notion, requireEnv } from '../lib/notion.js';
+import { createTask, getDueTask, markTaskStatus } from '../lib/notion-queue.js';
 
 function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
 function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
@@ -6,6 +7,11 @@ function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: m
 function checkKey(req) {
   const k = req.headers['x-mags-key'] || new URL(req.url, 'http://x').searchParams.get('key');
   return k && process.env.MAGS_KEY && k === process.env.MAGS_KEY;
+}
+
+function checkWorkerKey(req) {
+  const k = req.headers['x-worker-key'];
+  return k && process.env.WORKER_KEY && k === process.env.WORKER_KEY;
 }
 
 export const config = { runtime: 'nodejs' };
@@ -53,8 +59,61 @@ export default async function handler(req, res) {
       return bad(res, 'Method not allowed', 405);
     }
 
+    // ===== Queue: claim next job =====
+    if (pathname === '/api/queue/claim') {
+      if (!checkWorkerKey(req)) return bad(res, 'Unauthorized', 401);
+      if (method !== 'POST') return bad(res, 'Method not allowed', 405);
+      const job = await getDueTask();
+      if (!job) return ok(res, { job: null });
+      await markTaskStatus(job.id, 'Running');
+      return ok(res, { job });
+    }
+
+    // ===== Queue: finish job =====
+    if (pathname === '/api/queue/finish') {
+      if (!checkWorkerKey(req)) return bad(res, 'Unauthorized', 401);
+      if (method !== 'POST') return bad(res, 'Method not allowed', 405);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const { id, status, result = '', viewerURL = '' } = body;
+      if (!id || !status) return bad(res, 'Missing id or status');
+      await markTaskStatus(id, status, result, viewerURL);
+      return ok(res, { id });
+    }
+
     // secure endpoints
     if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+
+    // ===== Queue: add job =====
+    if (pathname === '/api/queue/add' && method === 'POST') {
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const { text, when, runner } = body;
+      if (!text) return bad(res, 'Missing text');
+      const r = await createTask({ text, when, runner });
+      return ok(res, { id: r.id });
+    }
+
+    // ===== Queue: peek upcoming =====
+    if (pathname === '/api/queue/peek' && method === 'GET') {
+      const r = await notion.databases.query({
+        database_id: requireEnv('NOTION_DB_TASKS_ID'),
+        filter: {
+          or: [
+            { property: 'Status', status: { equals: 'Todo' } },
+            { property: 'Status', status: { equals: 'Running' } },
+          ],
+        },
+        sorts: [{ property: 'When', direction: 'ascending' }],
+        page_size: 20,
+      });
+      const jobs = r.results.map((p) => ({
+        id: p.id,
+        text: p.properties?.Command?.rich_text?.[0]?.plain_text || '',
+        when: p.properties?.When?.date?.start || null,
+        status: p.properties?.Status?.status?.name || '',
+        runner: p.properties?.Runner?.rich_text?.[0]?.plain_text || 'browserless',
+      }));
+      return ok(res, { jobs });
+    }
 
     // ===== HQ: list children =====
     if (pathname.startsWith('/api/notion/hq/children') && method === 'GET') {

@@ -1,0 +1,47 @@
+name: mags-cron
+on:
+  schedule: [{ cron: "*/10 * * * *" }]
+  workflow_dispatch: {}
+  repository_dispatch:
+    types: [mags-run-queue]
+jobs:
+  run-queue:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Claim next job
+        run: |
+          curl -s -X POST "$API_BASE/api/queue/claim" \
+            -H "X-Worker-Key: $WORKER_KEY" \
+            -H "content-type: application/json" > job.json
+          cat job.json
+        env:
+          API_BASE: https://mags-assistant.vercel.app
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+      - name: Decide runner
+        id: parse
+        run: |
+          node -e "const fs=require('fs');const j=JSON.parse(fs.readFileSync('job.json','utf8')); if(!j.ok||!j.job){process.exit(78)}; console.log('::set-output name=job::'+JSON.stringify(j.job));"
+      - name: Setup Node
+        if: always()
+        uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - name: Install Playwright (only if using local)
+        if: env.RUN_WITH_PLAYWRIGHT == 'true'
+        run: |
+          npx playwright install --with-deps
+        env:
+          RUN_WITH_PLAYWRIGHT: ${{ secrets.RUN_WITH_PLAYWRIGHT }}
+      - name: Execute plan (local or remote)
+        run: |
+          node .github/workflows/worker.js
+        env:
+          API_BASE: https://mags-assistant.vercel.app
+          MAGS_KEY: ${{ secrets.MAGS_KEY }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+          RUN_WITH_PLAYWRIGHT: ${{ secrets.RUN_WITH_PLAYWRIGHT }}
+      - name: Upload artifacts (screenshots/logs)
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mags-run-${{ github.run_id }}
+          path: artifacts/**
