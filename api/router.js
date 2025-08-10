@@ -1,7 +1,14 @@
-import { notion, requireEnv } from '../lib/notion.js';
+import {
+  notion,
+  requireEnv,
+  enqueueTask,
+  claimNextTask,
+  completeTask,
+  failTask,
+  readTask,
+} from '../lib/notion.js';
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
-import { claimJob, runJob, completeJob } from './queue.js';
 import { env } from '../lib/env.js';
 
 function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
@@ -73,30 +80,67 @@ export default async function handler(req, res) {
       return bad(res, 'Method not allowed', 405);
     }
 
-    // ===== Queue: claim job =====
+    // ===== Queue: enqueue task =====
+    if (pathname === '/api/queue/enqueue' && method === 'POST') {
+      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      if (!body.task) return bad(res, 'Missing task');
+      const page = await enqueueTask(body);
+      return ok(res, { id: page.id });
+    }
+
+    // ===== Queue: claim =====
     if (pathname === '/api/queue/claim' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const job = await claimJob();
-      if (job) return ok(res, job);
-      return ok(res, {});
+      const page = await claimNextTask();
+      if (!page) return ok(res, { empty: true });
+      return ok(res, readTask(page));
     }
 
-    // ===== Queue: run job =====
-    if (pathname === '/api/queue/run' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const result = await runJob(body);
-      if (result.ok) return ok(res, result);
-      return bad(res, result.error || 'run failed', 500);
-    }
-
-    // ===== Queue: complete job =====
+    // ===== Queue: complete =====
     if (pathname === '/api/queue/complete' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const result = await completeJob(body);
-      if (result.ok) return ok(res, result);
-      return bad(res, result.error || 'complete failed', 500);
+      if (!body.id) return bad(res, 'Missing id');
+      await completeTask(body.id);
+      return ok(res, { id: body.id });
+    }
+
+    // ===== Queue: fail =====
+    if (pathname === '/api/queue/fail' && method === 'POST') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      if (!body.id) return bad(res, 'Missing id');
+      await failTask(body.id, body.error || 'error');
+      return ok(res, { id: body.id });
+    }
+
+    // ===== Run job =====
+    if (pathname === '/api/run' && method === 'POST') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const { id, task, type = 'ops', data } = body;
+      if (!id) return bad(res, 'Missing id');
+      try {
+        switch (type) {
+          case 'social-post':
+            console.log('social-post', task, data);
+            break;
+          case 'notion-maint':
+          case 'sync':
+          case 'crawl':
+          case 'plan':
+          case 'ops':
+          default:
+            console.log('run', type, task);
+            break;
+        }
+        await completeTask(id);
+        return ok(res, { id });
+      } catch (err) {
+        await failTask(id, err?.message || String(err));
+        return bad(res, err?.message || 'run failed', 500);
+      }
     }
 
     // secure endpoints
