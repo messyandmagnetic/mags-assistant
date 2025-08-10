@@ -38,3 +38,14 @@ We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 1
 ### Add your own tasks
 Create a file in `apps/api/lib/tasks/your-task.ts` that exports `async function myTask()`.
 Add it to `tasks` in `apps/api/lib/tasks/index.ts` with a unique key.
+
+## Scheduler
+
+Automated jobs are processed by a GitHub Actions workflow located at `.github/workflows/cron-runner.yml`.
+
+- **Manual trigger:** Open the [Actions page](https://github.com/messyandmagnetic/mags-assistant/actions), select `mags-cron`, and choose "Run workflow".
+- **Required secrets:** `WORKER_KEY`, `NOTION_TOKEN`, `NOTION_PAGE_ID`, `OPENAI_API_KEY`, and optional email alerts `ALERT_EMAIL_USER`, `ALERT_EMAIL_PASS`, `ALERT_TO`.
+- **Change schedule:** edit the cron expression under `on.schedule` in the workflow file.
+- **Endpoints:** the runner claims jobs from `/api/queue/next` and processes them via `/api/queue/run`.
+
+The current schedule runs every 10 minutes.
