@@ -1,8 +1,7 @@
 name: mags-cron
 
 on:
-  schedule:
-    - cron: "*/10 * * * *"   # run every 10 minutes
+  schedule: [{ cron: "*/10 * * * *" }]
   workflow_dispatch: {}
   repository_dispatch:
     types: [mags-run-queue]
@@ -13,6 +12,9 @@ permissions:
 jobs:
   run-queue:
     runs-on: ubuntu-latest
+    env:
+      API_BASE: ${{ secrets.API_BASE }}
+      WORKER_KEY: ${{ secrets.WORKER_KEY }}
     steps:
       - name: Install tools
         run: |
@@ -20,39 +22,30 @@ jobs:
           sudo apt-get install -y jq curl
 
       - name: Claim next job
-        env:
-          API_BASE: ${{ secrets.API_BASE }}           # e.g. https://mags-assistant.vercel.app
-          WORKER_KEY: ${{ secrets.WORKER_KEY }}       # same shared key your API expects in X-Worker-Key
         run: |
-          set -euo pipefail
-          curl -fsS -X POST "$API_BASE/api/queue/claim" \
-            -H "X-Worker-Key: $WORKER_KEY" \
-            -H "content-type: application/json" \
-            -o job.json || echo '{}' > job.json
-          cat job.json
-
-      - name: Exit if no job
-        run: |
-          jq -e '.jobId' job.json >/dev/null || { echo "No job available"; exit 0; }
+          set -e
+          JOB=$(curl -s -X POST "$API_BASE/api/queue/claim" -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json")
+          echo "$JOB" | tee job.json
+          if grep -q '"empty":true' job.json; then
+            echo "No jobs"; exit 0
+          fi
 
       - name: Run job
-        env:
-          API_BASE: ${{ secrets.API_BASE }}
         run: |
-          curl -fsS -X POST "$API_BASE/api/queue/run" \
-            -H "content-type: application/json" \
-            --data-binary @job.json
+          set -e
+          curl -s -X POST "$API_BASE/api/run" \
+            -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" \
+            --data-binary @job.json | tee run.json
 
-      - name: Complete job
-        if: always()
-        env:
-          API_BASE: ${{ secrets.API_BASE }}
-          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+      - name: Mark complete
+        if: success()
         run: |
-          JOB_ID=$(jq -r '.jobId // empty' job.json)
-          if [ -n "$JOB_ID" ]; then
-            curl -fsS -X POST "$API_BASE/api/queue/complete" \
-              -H "X-Worker-Key: $WORKER_KEY" \
-              -H "content-type: application/json" \
-              --data-binary @job.json || true
-          fi
+          ID=$(jq -r '.id' job.json)
+          curl -s -X POST "$API_BASE/api/queue/complete" -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" --data "{\"id\":\"$ID\"}"
+
+      - name: Mark failed
+        if: failure()
+        run: |
+          ID=$(jq -r '.id' job.json)
+          ERR=$(cat run.json 2>/dev/null || echo "runner failed")
+          curl -s -X POST "$API_BASE/api/queue/fail" -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" --data "{\"id\":\"$ID\",\"error\":${ERR@Q}}"

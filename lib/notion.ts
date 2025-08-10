@@ -1,16 +1,24 @@
 import { Client } from '@notionhq/client';
 
-export const notion = new Client({ auth: process.env.NOTION_TOKEN });
-const DB = process.env.NOTION_QUEUE_DB;
+export const notion = new Client({ auth: process.env.NOTION_TOKEN! });
+const DB = process.env.NOTION_QUEUE_DB!;
 
-export function requireEnv(name) {
+export function requireEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);
   return v;
 }
 
-export async function enqueueTask(input) {
-  const props = {
+type NotionPage = any;
+
+export async function enqueueTask(input: {
+  task: string;
+  type?: string;
+  data?: any;
+  runAt?: string | Date;
+  priority?: 'Low' | 'Normal' | 'High';
+}) {
+  const props: any = {
     Task: { title: [{ text: { content: input.task } }] },
     Status: { select: { name: 'Queued' } },
   };
@@ -34,7 +42,7 @@ export async function enqueueTask(input) {
   return page;
 }
 
-export async function claimNextTask() {
+export async function claimNextTask(): Promise<NotionPage | null> {
   const res = await notion.databases.query({
     database_id: DB,
     filter: {
@@ -70,14 +78,14 @@ export async function claimNextTask() {
   return page;
 }
 
-export async function completeTask(pageId) {
+export async function completeTask(pageId: string) {
   await notion.pages.update({
     page_id: pageId,
     properties: { Status: { select: { name: 'Done' } } },
   });
 }
 
-export async function failTask(pageId, message) {
+export async function failTask(pageId: string, message: string) {
   await notion.pages.update({
     page_id: pageId,
     properties: {
@@ -91,14 +99,14 @@ export async function failTask(pageId, message) {
   });
 }
 
-export function readTask(page) {
-  const props = page.properties;
-  const val = (key) => props[key];
-  const text = (key) => (val(key)?.rich_text?.[0]?.plain_text ?? '').trim();
-  const select = (key) => val(key)?.select?.name ?? null;
+export function readTask(page: any) {
+  const props: any = page.properties;
+  const val = (key: string) => props[key];
+  const text = (key: string) => (val(key)?.rich_text?.[0]?.plain_text ?? '').trim();
+  const select = (key: string) => val(key)?.select?.name ?? null;
   const title = (val('Task')?.title?.[0]?.plain_text ?? '').trim();
 
-  let data;
+  let data: any = undefined;
   try {
     data = text('Data') ? JSON.parse(text('Data')) : undefined;
   } catch {}
