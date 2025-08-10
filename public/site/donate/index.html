@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Donate - Mags</title>
+  <meta name="description" content="Support Mags" />
+  <link rel="canonical" href="https://mags-assistant.vercel.app/site/donate/" />
+  <meta property="og:title" content="Donate - Mags" />
+  <meta property="og:description" content="Support Mags" />
+  <meta property="og:url" content="https://mags-assistant.vercel.app/site/donate/" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <link rel="stylesheet" href="/brand.css" />
+</head>
+<body>
+  <h1>Donate</h1>
+  <p>Choose an amount to support us.</p>
+  <button>$5</button>
+  <button>$10</button>
+  <button>$20</button>
+  <section id="donor-wall" aria-label="Donor Wall">
+    <h2>Donor Wall</h2>
+    <ul></ul>
+  </section>
+  <script>
+    const key = localStorage.getItem('magsKey');
+    fetch('/api/donors', key ? {headers:{'x-mags-key':key}} : {}).then(r=>r.json()).then(data=>{
+      const list=document.querySelector('#donor-wall ul');
+      if(Array.isArray(data.donors)){
+        data.donors.forEach(d=>{
+          const li=document.createElement('li');
+          li.textContent=d.name||'Anonymous';
+          list.appendChild(li);
+        });
+      }
+    });
+  </script>
+</body>
+</html>
