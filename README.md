@@ -44,8 +44,8 @@ Add it to `tasks` in `apps/api/lib/tasks/index.ts` with a unique key.
 Automated jobs are processed by a GitHub Actions workflow located at `.github/workflows/cron-runner.yml`.
 
 - **Manual trigger:** Open the [Actions page](https://github.com/messyandmagnetic/mags-assistant/actions), select `mags-cron`, and choose "Run workflow".
-- **Required secrets:** `WORKER_KEY`, `NOTION_TOKEN`, `NOTION_PAGE_ID`, `OPENAI_API_KEY`, and optional email alerts `ALERT_EMAIL_USER`, `ALERT_EMAIL_PASS`, `ALERT_TO`.
+- **Required secrets:** `API_BASE`, `WORKER_KEY`, `NOTION_TOKEN`, `NOTION_PAGE_ID`, `OPENAI_API_KEY`, and optional email alerts `ALERT_EMAIL_USER`, `ALERT_EMAIL_PASS`, `ALERT_TO`.
 - **Change schedule:** edit the cron expression under `on.schedule` in the workflow file.
-- **Endpoints:** the runner claims jobs from `/api/queue/next` and processes them via `/api/queue/run`.
+- **Endpoints:** the runner claims jobs from `/api/queue/claim`, runs them via `/api/queue/run`, and marks them done with `/api/queue/complete`.
 
 The current schedule runs every 10 minutes.

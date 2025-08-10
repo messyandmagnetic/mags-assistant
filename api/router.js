@@ -1,7 +1,7 @@
 import { notion, requireEnv } from '../lib/notion.js';
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
-import { nextJob, runJob } from './queue.js';
+import { claimJob, runJob, completeJob } from './queue.js';
 
 function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
 function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
@@ -61,15 +61,12 @@ export default async function handler(req, res) {
       return bad(res, 'Method not allowed', 405);
     }
 
-    // ===== Queue: claim next job =====
-    if (pathname === '/api/queue/next' && method === 'POST') {
+    // ===== Queue: claim job =====
+    if (pathname === '/api/queue/claim' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const job = await nextJob();
+      const job = await claimJob();
       if (job) return ok(res, job);
-      const delay = 500 + Math.random() * 1000;
-      await new Promise(r => setTimeout(r, delay));
-      res.status(204).end();
-      return;
+      return ok(res, {});
     }
 
     // ===== Queue: run job =====
@@ -79,6 +76,15 @@ export default async function handler(req, res) {
       const result = await runJob(body);
       if (result.ok) return ok(res, result);
       return bad(res, result.error || 'run failed', 500);
+    }
+
+    // ===== Queue: complete job =====
+    if (pathname === '/api/queue/complete' && method === 'POST') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const result = await completeJob(body);
+      if (result.ok) return ok(res, result);
+      return bad(res, result.error || 'complete failed', 500);
     }
 
     // secure endpoints
