@@ -13,6 +13,32 @@ import {
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
 import { env } from '../lib/env.js';
+import {
+  addCommand,
+  getCommand,
+  getPending,
+  updateCommand,
+  listCommands,
+  resetRunNow,
+} from '../lib/command-center.js';
+import { runHandler } from '../lib/handlers.js';
+
+// guardrail state
+const rateLimit = new Map(); // ip -> {count, ts}
+let paused = env.EXECUTION_PAUSED;
+
+function checkRate(req, limit = 5) {
+  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'local';
+  const now = Date.now();
+  const entry = rateLimit.get(ip) || { count: 0, ts: now };
+  if (now - entry.ts > 60000) {
+    entry.count = 0;
+    entry.ts = now;
+  }
+  entry.count += 1;
+  rateLimit.set(ip, entry);
+  return entry.count <= limit;
+}
 
 function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
 function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
@@ -25,6 +51,11 @@ function checkKey(req) {
 function checkWorker(req) {
   const k = req.headers['x-worker-key'] || new URL(req.url, 'http://x').searchParams.get('key');
   return k && env.WORKER_KEY && k === env.WORKER_KEY;
+}
+
+function checkCron(req) {
+  const k = req.headers['x-mags-key'] || new URL(req.url, 'http://x').searchParams.get('key');
+  return k && env.CRON_SECRET && k === env.CRON_SECRET;
 }
 
 async function readJson(req) {
@@ -72,6 +103,77 @@ export default async function handler(req, res) {
           hq: !!env.NOTION_HQ_PAGE_ID,
         },
       });
+    }
+
+    // ===== Commands: run =====
+    if (pathname === '/api/commands/run' && method === 'POST') {
+      if (!checkRate(req)) return bad(res, 'Rate limit', 429);
+      const body =
+        req.body && typeof req.body === 'object' ? req.body : await readJson(req);
+      let cmd;
+      if (body.id) {
+        cmd = getCommand(body.id);
+        if (!cmd) return bad(res, 'Not found', 404);
+      } else {
+        cmd = addCommand(body.command || '', body.args || '');
+      }
+      try {
+        updateCommand(cmd.id, { status: 'Running' });
+        const result = await runHandler(cmd.command, cmd.args);
+        updateCommand(cmd.id, {
+          status: 'Succeeded',
+          output: result,
+          runNow: false,
+        });
+        return ok(res, { id: cmd.id, status: 'Succeeded', result });
+      } catch (e) {
+        updateCommand(cmd.id, {
+          status: 'Failed',
+          output: e.message,
+          runNow: false,
+        });
+        return bad(res, e.message || 'Error', 500);
+      }
+    }
+
+    // ===== Commands: logs =====
+    if (pathname === '/api/commands/logs' && method === 'GET') {
+      const logs = listCommands().slice(-10).reverse();
+      return ok(res, { logs });
+    }
+
+    // ===== Commands: scan =====
+    if (pathname === '/api/commands/scan' && method === 'POST') {
+      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
+      if (paused) return ok(res, { paused: true });
+      const pending = getPending();
+      const results = [];
+      for (const cmd of pending) {
+        try {
+          updateCommand(cmd.id, { status: 'Running' });
+          const r = await runHandler(cmd.command, cmd.args);
+          updateCommand(cmd.id, { status: 'Succeeded', output: r });
+          resetRunNow(cmd.id);
+          results.push({ id: cmd.id, ok: true });
+        } catch (e) {
+          updateCommand(cmd.id, { status: 'Failed', output: e.message });
+          resetRunNow(cmd.id);
+          results.push({ id: cmd.id, ok: false, error: e.message });
+        }
+      }
+      return ok(res, { count: results.length, results });
+    }
+
+    // ===== Commands: pause/resume =====
+    if (pathname === '/api/commands/pause' && method === 'POST') {
+      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
+      paused = true;
+      return ok(res, { paused: true });
+    }
+    if (pathname === '/api/commands/resume' && method === 'POST') {
+      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
+      paused = false;
+      return ok(res, { paused: false });
     }
 
     // existing rpa/start endpoint
