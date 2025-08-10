@@ -6,6 +6,7 @@ import {
   completeTask,
   failTask,
   queueHealth,
+  readTask,
 } from '../lib/notion.js';
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
@@ -24,6 +25,16 @@ function checkWorker(req) {
   return k && env.WORKER_KEY && k === env.WORKER_KEY;
 }
 
+async function readJson(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(chunk);
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString() || '{}');
+  } catch {
+    return {};
+  }
+}
+
 export const config = { runtime: 'nodejs' };
 
 export default async function handler(req, res) {
@@ -34,8 +45,12 @@ export default async function handler(req, res) {
 
     // health / diag
     if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
-    if (pathname === '/api/rpa/health') return ok(res, {});
+    if (pathname === '/api/rpa/health') {
+      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+      return ok(res, {});
+    }
     if (pathname === '/api/rpa/diag') {
+      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
       return ok(res, {
         haveKeys: {
           notion: !!env.NOTION_TOKEN,
@@ -59,6 +74,7 @@ export default async function handler(req, res) {
 
     // existing rpa/start endpoint
     if (pathname === '/api/rpa/start') {
+      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
       if (method === 'POST') {
         const body = req.body && typeof req.body === 'object' ? req.body : {};
         const target = typeof body.url === 'string' ? body.url.trim() : '';
@@ -80,21 +96,34 @@ export default async function handler(req, res) {
       return bad(res, 'Method not allowed', 405);
     }
 
-    // ===== Queue: enqueue task =====
+    // ===== Queue: enqueue =====
     if (pathname === '/api/queue/enqueue' && method === 'POST') {
-      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      if (!body.task) return bad(res, 'Missing task');
-      const { jobId } = await enqueueTask(body);
-      return ok(res, { id: jobId });
+      if (req.headers['x-mags-key'] !== env.MAGS_KEY) return bad(res, 'Unauthorized', 401);
+      if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
+      const data = await readJson(req).catch(() => ({}));
+      const payload = data?.payload ?? {};
+      const jobId = `job_${Date.now()}`;
+      const page = await enqueueTask({ jobId, payload });
+      return ok(res, { id: jobId, pageId: page?.id ?? null });
+    }
+
+    // ===== Queue: seed =====
+    if (pathname === '/api/queue/seed' && method === 'POST') {
+      if (req.headers['x-mags-key'] !== env.MAGS_KEY) return bad(res, 'Unauthorized', 401);
+      if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
+      const jobId = `job_${Date.now()}`;
+      const payload = { hello: 'world', ts: new Date().toISOString() };
+      const page = await enqueueTask({ jobId, payload });
+      return ok(res, { id: jobId, pageId: page?.id ?? null, seeded: true });
     }
 
     // ===== Queue: claim =====
     if (pathname === '/api/queue/claim' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const job = await claimNextTask();
-      if (!job) return ok(res, { id: null });
-      return ok(res, job);
+      if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
+      const page = await claimNextTask();
+      if (!page) return ok(res, { id: null });
+      return ok(res, readTask(page));
     }
 
     // ===== Queue: complete =====
