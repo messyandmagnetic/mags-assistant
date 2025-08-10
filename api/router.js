@@ -1,6 +1,7 @@
 import { notion, requireEnv } from '../lib/notion.js';
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
+import { nextJob, runJob } from './queue.js';
 
 function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
 function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
@@ -8,6 +9,11 @@ function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: m
 function checkKey(req) {
   const k = req.headers['x-mags-key'] || new URL(req.url, 'http://x').searchParams.get('key');
   return k && process.env.MAGS_KEY && k === process.env.MAGS_KEY;
+}
+
+function checkWorker(req) {
+  const k = req.headers['x-worker-key'] || new URL(req.url, 'http://x').searchParams.get('key');
+  return k && process.env.WORKER_KEY && k === process.env.WORKER_KEY;
 }
 
 export const config = { runtime: 'nodejs' };
@@ -53,6 +59,26 @@ export default async function handler(req, res) {
         });
       }
       return bad(res, 'Method not allowed', 405);
+    }
+
+    // ===== Queue: claim next job =====
+    if (pathname === '/api/queue/next' && method === 'POST') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      const job = await nextJob();
+      if (job) return ok(res, job);
+      const delay = 500 + Math.random() * 1000;
+      await new Promise(r => setTimeout(r, delay));
+      res.status(204).end();
+      return;
+    }
+
+    // ===== Queue: run job =====
+    if (pathname === '/api/queue/run' && method === 'POST') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
+      const result = await runJob(body);
+      if (result.ok) return ok(res, result);
+      return bad(res, result.error || 'run failed', 500);
     }
 
     // secure endpoints
