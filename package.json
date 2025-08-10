@@ -6,5 +6,8 @@
     "build": "echo \"static + api\"",
     "start": "node server.js || echo \"Using Vercel serverless\"",
     "test": "node --check api/router.js"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.6"
   }
 }
