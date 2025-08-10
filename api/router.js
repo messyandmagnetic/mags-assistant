@@ -5,7 +5,7 @@ import {
   claimNextTask,
   completeTask,
   failTask,
-  readTask,
+  queueHealth,
 } from '../lib/notion.js';
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
@@ -85,16 +85,16 @@ export default async function handler(req, res) {
       if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
       const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
       if (!body.task) return bad(res, 'Missing task');
-      const page = await enqueueTask(body);
-      return ok(res, { id: page.id });
+      const { jobId } = await enqueueTask(body);
+      return ok(res, { id: jobId });
     }
 
     // ===== Queue: claim =====
     if (pathname === '/api/queue/claim' && method === 'POST') {
       if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const page = await claimNextTask();
-      if (!page) return ok(res, { empty: true });
-      return ok(res, readTask(page));
+      const job = await claimNextTask();
+      if (!job) return ok(res, { id: null });
+      return ok(res, job);
     }
 
     // ===== Queue: complete =====
@@ -113,6 +113,13 @@ export default async function handler(req, res) {
       if (!body.id) return bad(res, 'Missing id');
       await failTask(body.id, body.error || 'error');
       return ok(res, { id: body.id });
+    }
+
+    // ===== Queue: health =====
+    if (pathname === '/api/queue/health' && method === 'GET') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      await queueHealth();
+      return ok(res, {});
     }
 
     // ===== Run job =====

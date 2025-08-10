@@ -12,67 +12,59 @@ permissions:
 jobs:
   run-queue:
     runs-on: ubuntu-latest
-    env:
-      API_BASE: ${{ secrets.API_BASE }}
-      WORKER_KEY: ${{ secrets.WORKER_KEY }}
     steps:
       - name: Install tools
         run: |
           sudo apt-get update -y
           sudo apt-get install -y jq curl
 
-      - name: Claim next job
+      - name: Run job
+        id: runjob
         shell: bash
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
         run: |
           set -euo pipefail
-          echo "Claiming next job from $API_BASE ..."
-          curl -sS -X POST "$API_BASE/api/queue/claim" \
-            -H "X-Worker-Key: $WORKER_KEY" \
-            -H "content-type: application/json" \
-            -d '{}' | tee job.json
-
-          # If job.json has a valid JSON object with an id, export it; else flag NO_JOB
-          if jq -e '.id' job.json >/dev/null 2>&1; then
-            echo "CLAIMED_ID=$(jq -r '.id' job.json)" >> "$GITHUB_ENV"
-            echo "NO_JOB=false" >> "$GITHUB_ENV"
-          else
-            echo "No job returned:"
-            cat job.json || true
-            echo "NO_JOB=true" >> "$GITHUB_ENV"
+          # claim
+          curl -s -X POST "$API_BASE/api/queue/claim" \
+            -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" \
+            -d '{}' > job.json
+          ID=$(jq -r '.id // empty' job.json || true)
+          echo "ID=$ID"
+          if [ -z "${ID:-}" ]; then
+            echo "No jobs in queue; exiting 0"
+            echo "nojob=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
 
-      - name: Run job
-        if: env.NO_JOB == 'false'
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "Running job $CLAIMED_ID ..."
-          curl -sS -X POST "$API_BASE/api/queue/run" \
-            -H "X-Worker-Key: $WORKER_KEY" \
-            -H "content-type: application/json" \
-            --data-binary @job.json | tee run.json
+          # Here is where you'd actually do the work; we just echo payload for now.
+          jq -r '.payload[0].plain_text // empty' job.json > run.log 2>/dev/null || true
+          echo "nojob=false" >> "$GITHUB_OUTPUT"
 
       - name: Mark complete
-        if: env.NO_JOB == 'false'
+        if: steps.runjob.outputs.nojob == 'false'
         shell: bash
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
         run: |
           set -euo pipefail
-          ID="$CLAIMED_ID"
-          curl -sS -X POST "$API_BASE/api/queue/complete" \
-            -H "X-Worker-Key: $WORKER_KEY" \
-            -H "content-type: application/json" \
-            -d "{\"id\":\"$ID\"}"
+          ID=$(jq -r '.id' job.json)
+          curl -s -X POST "$API_BASE/api/queue/complete" \
+            -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" \
+            -d "{\"id\":\"$ID\"}" >/dev/null
 
       - name: Mark failed
-        if: env.NO_JOB == 'false' && failure()
+        if: failure() && steps.runjob.outputs.nojob == 'false'
         shell: bash
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
         run: |
           set -euo pipefail
-          ID="$CLAIMED_ID"
-          ERR="$(cat run.json 2>/dev/null || echo 'runner failed')"
-          curl -sS -X POST "$API_BASE/api/queue/fail" \
-            -H "X-Worker-Key: $WORKER_KEY" \
-            -H "content-type: application/json" \
-            -d "{\"id\":\"$ID\",\"error\":$(
-              jq -Rs '.' <<<"$ERR"
-            )}"
+          ID=$(jq -r '.id' job.json)
+          ERR=$(cat run.log 2>/dev/null || echo "runner failed")
+          curl -s -X POST "$API_BASE/api/queue/fail" \
+            -H "X-Worker-Key: $WORKER_KEY" -H "content-type: application/json" \
+            -d '{"id":"'"$ID"'","error":'"$(jq -Rn --arg e "$ERR" '$e')"'}' >/dev/null
