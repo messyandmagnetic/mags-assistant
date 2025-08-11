@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import ChatUI from '../../components/ChatUI';
+import ClipUploader from '../../components/ClipUploader';
 import { COOKIE_NAME, verifyPassword, passwordEnabled, sessionCookie } from '../../lib/auth';
 
 export default function ChatPage() {
@@ -67,6 +68,7 @@ export default function ChatPage() {
           Warning: CHAT_PASSWORD is not set; chat is public.
         </div>
       )}
+      <ClipUploader />
       <ChatUI />
     </div>
   );
