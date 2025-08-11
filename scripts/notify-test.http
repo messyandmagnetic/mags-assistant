@@ -1,0 +1,15 @@
+### Local
+POST http://localhost:3000/api/notify
+Content-Type: application/json
+
+{
+  "text": "hello from notify-test"
+}
+
+### Preview
+POST https://mags-assistant.vercel.app/api/notify
+Content-Type: application/json
+
+{
+  "text": "hello from notify-test"
+}
