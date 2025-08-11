@@ -1,0 +1,48 @@
+name: mags-ops-fallback
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "Task to run"
+        required: true
+        type: choice
+        options:
+          - sync-stripe-from-notion
+          - export-notion
+        default: sync-stripe-from-notion
+      dry:
+        description: "Dry run?"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - run: npm ci
+      - name: Export Notion (optional)
+        if: ${{ inputs.task == 'export-notion' }}
+        run: npx tsx scripts/notion_export.ts
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          PRODUCTS_DB_ID: ${{ secrets.PRODUCTS_DB_ID }}
+      - name: Sync Stripe from Notion
+        if: ${{ inputs.task == 'sync-stripe-from-notion' }}
+        run: npx tsx scripts/stripe_sync.ts ${{ inputs.dry && '--dry' || '' }}
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          PRODUCTS_DB_ID: ${{ secrets.PRODUCTS_DB_ID }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+      - name: Announce summary (optional)
+        if: always()
+        run: npx tsx scripts/announce.ts
+        env:
+          RESEND_API_KEY: ${{ secrets.RESEND_API_KEY }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}

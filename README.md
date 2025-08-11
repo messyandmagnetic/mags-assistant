@@ -84,3 +84,20 @@ To recreate the database and seed the initial job, call:
 ```sh
 curl -X POST "$API_BASE/api/queue/seed" -H "x-mags-key: $CRON_SECRET"
 ```
+
+## Fallback Ops
+
+Manual Stripe/Notion tasks can run via GitHub Actions when Mags is offline.
+
+### Required secrets
+Set these in Repo → Settings → Secrets and variables → Actions:
+- `NOTION_TOKEN` – internal Notion integration
+- `PRODUCTS_DB_ID` – ID of the "Stripe Product Tracker" database
+- `STRIPE_SECRET_KEY`
+- optional: `RESEND_API_KEY`, `NOTIFY_EMAIL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+
+### Run
+1. Open **GitHub → Actions** and select **mags-ops-fallback**.
+2. Click **Run workflow**.
+3. Choose a task (e.g. `sync-stripe-from-notion`) and start with **Dry run** = true.
+4. Inspect the logs, then re-run with **Dry run** = false to apply changes.
