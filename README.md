@@ -31,9 +31,14 @@ The `/chat` interface requires the following environment variables:
 - `STRIPE_SECRET_KEY` – Stripe API key.
 - `RESEND_API_KEY` – optional; API key for sending email notifications.
 - `NOTIFY_EMAIL` – optional email address for notifications.
-- `NOTIFY_WEBHOOK` – optional Slack/Discord webhook for notifications.
 - `BRAND_PRIMARY_HEX` – optional primary color override.
 - `BRAND_SECONDARY_HEX` – optional secondary color override.
+
+## Notifications & Telegram
+
+- Required: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+- Optional: `RESEND_API_KEY`, `NOTIFY_EMAIL`
+- Telegram webhook URL: https://assistant.messyandmagnetic.com/api/telegram/webhook
 
 ## Scheduled Tasks (free)
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.

@@ -70,27 +70,14 @@ async function readJson(req) {
 }
 
 async function notify(subject, message) {
-  const key = process.env.RESEND_API_KEY;
-  const to = process.env.NOTIFY_EMAIL;
-  if (!key || !to) return;
   try {
-    await fetch('https://api.resend.com/emails', {
+    await fetch(`${process.env.API_BASE ?? ''}/api/notify`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${key}`,
-      },
-      body: JSON.stringify({
-        from: 'Mags <noreply@messyandmagnetic.com>',
-        to: [to],
-        subject,
-        text: message,
-      }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: `${subject}: ${message}` }),
     });
   } catch {}
 }
-
-export const config = { runtime: 'nodejs' };
 
 export default async function handler(req, res) {
   const { method, url } = req;

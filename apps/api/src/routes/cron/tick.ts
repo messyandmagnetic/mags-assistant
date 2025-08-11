@@ -12,6 +12,16 @@ function authorized(req: NextRequest) {
   return (h === `Bearer ${key}`) || (url.searchParams.get("key") === key);
 }
 
+async function notify(text: string) {
+  try {
+    await fetch(`${process.env.API_BASE ?? ''}/api/notify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+  } catch {}
+}
+
 export async function GET(req: NextRequest) {
   if (!authorized(req)) return NextResponse.json({ ok: false, error: "unauthorized" }, { status: 401 });
 
@@ -24,6 +34,9 @@ export async function GET(req: NextRequest) {
   }
 
   const results = await runTasks(only.length ? only : undefined);
+  for (const r of results) {
+    await notify(`mags-cron: ${r.name} ${r.ok ? 'ok' : 'failed'}${r.msg ? ': ' + r.msg : ''}`);
+  }
   const ok = results.every(r => r.ok);
   return NextResponse.json({ ok, ran: results });
 }

@@ -31,10 +31,11 @@ export async function createNotionTask({ title, details, status }: { title: stri
 }
 
 export async function notify({ level, title, message, links }: { level: string; title: string; message: string; links?: any[] }) {
+  const text = `[${level}] ${title}: ${message}${links?.length ? ' ' + links.join(' ') : ''}`;
   await fetch('/api/notify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ level, title, message, links }),
+    body: JSON.stringify({ text }),
   });
   return { ok: true };
 }
