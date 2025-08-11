@@ -39,3 +39,27 @@ $('#copy').addEventListener('click', async () => {
     console.error(err);
   }
 });
+
+$('#createLink').addEventListener('click', async () => {
+  const magsKey = localStorage.getItem('magsKey') || '';
+  const crmId = prompt('CRM Record ID (optional)') || '';
+  try {
+    const res = await fetch('/api/donations/create', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(magsKey ? { 'x-mags-key': magsKey } : {}),
+      },
+      body: JSON.stringify(crmId ? { crmId } : {}),
+    });
+    const json = await res.json().catch(() => ({}));
+    if (json.ok && json.link) {
+      try { await navigator.clipboard.writeText(json.link); } catch {}
+      alert('Link created and copied to clipboard');
+    } else {
+      alert(json.error || 'Error creating link');
+    }
+  } catch (err) {
+    alert('Error creating link');
+  }
+});
