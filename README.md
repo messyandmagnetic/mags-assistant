@@ -10,6 +10,8 @@ Test links:
 - https://mags-assistant.vercel.app/diag
 - https://mags-assistant.vercel.app/health
 - https://mags-assistant.vercel.app/console — simple command console
+- https://mags-assistant.vercel.app/chat — chat with Mags
+- https://mags-assistant.vercel.app/planner — task planner dashboard
 
 Example curl for start:
 
@@ -29,6 +31,11 @@ The `/chat` interface requires the following environment variables:
 - `NOTION_HQ_PAGE_ID` – Notion HQ page ID.
 - `NOTION_QUEUE_DB` – Notion queue database ID.
 - `STRIPE_SECRET_KEY` – Stripe API key.
+- `RESEND_API_KEY` – optional API key for sending email notifications.
+- `NOTIFY_EMAIL` – optional address used for notifications.
+- `NOTIFY_WEBHOOK` – optional Slack/Discord webhook for alerts.
+- `BRAND_PRIMARY_HEX` – optional primary color override.
+- `BRAND_SECONDARY_HEX` – optional secondary color override.
 
 ## Scheduled Tasks (free)
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.
