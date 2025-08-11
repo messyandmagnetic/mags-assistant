@@ -106,3 +106,51 @@ Set these in Repo → Settings → Secrets and variables → Actions:
 2. Click **Run workflow**.
 3. Choose a task (e.g. `sync-stripe-from-notion`) and start with **Dry run** = true.
 4. Inspect the logs, then re-run with **Dry run** = false to apply changes.
+
+## Environment Variables
+
+```
+OPENAI_API_KEY
+CHAT_PASSWORD
+NOTION_TOKEN
+NOTION_HQ_PAGE_ID
+NOTION_QUEUE_DB
+PRODUCTS_DB_ID
+STRIPE_SECRET_KEY
+RESEND_API_KEY          # optional
+NOTIFY_EMAIL            # optional
+NOTIFY_WEBHOOK          # optional
+BRAND_PRIMARY_HEX       # optional
+BRAND_SECONDARY_HEX     # optional
+TELEGRAM_BOT_TOKEN      # optional
+TELEGRAM_CHAT_ID        # optional
+APPROVAL_MODE           # strict | normal | free
+```
+
+## Unread badge
+
+`GET /api/chat/unread` returns `{ count }`. The header and dashboard poll this endpoint every 30s and show a red badge on the Chat link when the count is greater than zero. Opening `/chat` clears the count.
+
+## Research
+
+_(coming soon)_
+
+## Memory
+
+_(coming soon)_
+
+## Email triage
+
+_(coming soon)_
+
+## Grant pack
+
+_(coming soon)_
+
+## Stripe audit
+
+_(coming soon)_
+
+## Content planner
+
+_(coming soon)_

@@ -26,6 +26,12 @@ export default function ChatPage() {
     }
   }, []);
 
+  useEffect(() => {
+    if (authed) {
+      fetch('/api/chat/unread?clear=1').catch(() => {});
+    }
+  }, [authed]);
+
   const [input, setInput] = useState('');
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -55,7 +61,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col">
+    <div className="flex flex-col flex-1">
       {warning && (
         <div className="bg-yellow-100 text-center text-sm p-2">
           Warning: CHAT_PASSWORD is not set; chat is public.
