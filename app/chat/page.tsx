@@ -1,19 +1,19 @@
 'use client';
-import { useEffect, useState } from 'react';
 import ChatUI from '../../components/ChatUI';
-import { COOKIE_NAME, verifyPassword, passwordEnabled, sessionCookie } from '../../lib/auth';
+import { useEffect, useState } from 'react';
+import { COOKIE_NAME, verifyPassword, sessionCookie } from '../../lib/auth';
 
 export default function ChatPage() {
   const [authed, setAuthed] = useState(false);
   const [warning, setWarning] = useState(false);
 
   useEffect(() => {
-    const hasPass = passwordEnabled();
+    const hasPass = !verifyPassword('');
     if (!hasPass) {
-      setWarning(true);
       setAuthed(true);
       return;
     }
+    setWarning(true);
     const params = new URLSearchParams(window.location.search);
     const key = params.get('key');
     if (key && verifyPassword(key)) {
@@ -27,10 +27,17 @@ export default function ChatPage() {
   }, []);
 
   useEffect(() => {
-    if (authed) {
-      fetch('/api/chat/unread?clear=1').catch(() => {});
-    }
-  }, [authed]);
+    const clear = () => {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'read', title: 'chat:read', message: 'clear unread', links: [] }),
+      });
+    };
+    clear();
+    window.addEventListener('focus', clear);
+    return () => window.removeEventListener('focus', clear);
+  }, []);
 
   const [input, setInput] = useState('');
   function submit(e: React.FormEvent) {
@@ -41,7 +48,7 @@ export default function ChatPage() {
     }
   }
 
-  if (!authed) {
+  if (!authed && warning) {
     return (
       <div className="max-w-sm mx-auto p-4">
         <form onSubmit={submit} className="flex flex-col gap-2">
@@ -62,11 +69,6 @@ export default function ChatPage() {
 
   return (
     <div className="flex flex-col flex-1">
-      {warning && (
-        <div className="bg-yellow-100 text-center text-sm p-2">
-          Warning: CHAT_PASSWORD is not set; chat is public.
-        </div>
-      )}
       <ChatUI />
     </div>
   );
