@@ -48,6 +48,13 @@ Configure optional outbound notifications.
 - Send notifications via `POST /api/notify`.
 - Telegram bots receive updates at `https://assistant.messyandmagnetic.com/api/telegram/webhook`.
 
+### Telegram approvals
+
+Proposal notifications include inline **Approve/Decline** buttons.
+Button presses send `{actionId, runId, kind}` to `/api/approve` which
+invokes the relevant worker (`sendOutreach`, schedules a follow-up, or
+marks content approved). Declines mark the run as **Rejected**.
+
 ## Scheduled Tasks (free)
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.
 

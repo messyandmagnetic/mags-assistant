@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 
 export async function POST(req: NextRequest) {
   try {
-    const { text = '', html } = await req.json();
+    const { text = '', html, proposal } = await req.json();
     const tgToken = process.env.TELEGRAM_BOT_TOKEN;
     const tgChat = process.env.TELEGRAM_CHAT_ID;
     const resendKey = process.env.RESEND_API_KEY;
@@ -12,11 +12,32 @@ export async function POST(req: NextRequest) {
     const plain = text || (html ? html.replace(/<[^>]+>/g, '').slice(0, 4000) : '');
 
     if (tgToken && tgChat) {
-      tasks.push(fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: tgChat, text: plain })
-      }));
+      const body: any = { chat_id: tgChat, text: plain };
+      if (proposal && proposal.actionId && proposal.runId && proposal.kind) {
+        const approve = {
+          ...proposal,
+          decision: 'approve',
+        };
+        const decline = {
+          ...proposal,
+          decision: 'decline',
+        };
+        body.reply_markup = {
+          inline_keyboard: [
+            [
+              { text: 'Approve', callback_data: JSON.stringify(approve) },
+              { text: 'Decline', callback_data: JSON.stringify(decline) },
+            ],
+          ],
+        };
+      }
+      tasks.push(
+        fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        })
+      );
     }
 
     if (resendKey && notifyEmail) {
