@@ -81,7 +81,7 @@ export default function ChatUI() {
   }
 
   const quick = [
-    { label: 'Sync Stripe ↔ Notion (two-way)', prompt: 'Sync Stripe and Notion (two-way)' },
+    { label: 'Sync Stripe ↔ Notion', prompt: 'Sync Stripe and Notion (two-way)' },
     { label: 'Generate on-brand image for selected product', prompt: 'Generate on-brand image for selected product' },
     { label: 'Audit Stripe products (propose fixes)', prompt: 'Audit Stripe products and propose fixes' },
     { label: 'Create Notion task from this chat', prompt: 'Create a Notion task from this chat' },
