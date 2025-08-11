@@ -2,8 +2,8 @@
 import { useEffect, useRef, useState } from 'react';
 
 const palette = {
-  sage: '#9BB5A3',
-  blush: '#E8C8C3',
+  sage: process.env.BRAND_PRIMARY_HEX ?? '#9BB5A3',
+  blush: process.env.BRAND_SECONDARY_HEX ?? '#E8C8C3',
   cream: '#FBF6EF',
   charcoal: '#2B2B2B',
   gold: '#D8B26E',
@@ -35,7 +35,7 @@ function renderMessage(text: string) {
   });
 }
 
-export default function ChatUI() {
+export default function ChatUI({ title }: { title?: string }) {
   const [messages, setMessages] = useState<Message[]>(() => {
     if (typeof window === 'undefined') return [];
     const saved = localStorage.getItem('mags-chat-history');
@@ -49,6 +49,10 @@ export default function ChatUI() {
     localStorage.setItem('mags-chat-history', JSON.stringify(messages));
     listRef.current?.scrollTo(0, listRef.current.scrollHeight);
   }, [messages]);
+
+  useEffect(() => {
+    if (title) document.title = title;
+  }, [title]);
 
   async function send(prompt?: string) {
     const content = prompt ?? input.trim();

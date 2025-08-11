@@ -1,4 +1,7 @@
-import { getNotion } from '../../lib/clients/notion';
+import { getNotion } from '../../lib/notion';
+import { Inter, Fraunces } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+const fraunces = Fraunces({ subsets: ['latin'] });
 
 function readProp(page: any, name: string) {
   const prop = page.properties[name];
