@@ -23,6 +23,7 @@ import {
   resetRunNow,
 } from '../lib/command-center.js';
 import { runHandler } from '../lib/handlers.js';
+import { getStripe } from '../lib/clients/stripe.js';
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -340,6 +341,53 @@ Output:
 
     // secure endpoints
     if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+
+    // ===== Donations: create $250 link =====
+    if (pathname === '/api/donations/create' && method === 'POST') {
+      try {
+        const body =
+          typeof req.body === 'object' ? req.body : await readJson(req);
+        const stripe = getStripe();
+        let product;
+        try {
+          const search = await stripe.products.search({
+            query: "name:'Nonprofit Filing Support'",
+          });
+          product = search.data[0];
+        } catch {}
+        if (!product) {
+          product = await stripe.products.create({
+            name: 'Nonprofit Filing Support',
+          });
+        }
+        const price = await stripe.prices.create({
+          unit_amount: 25000,
+          currency: 'usd',
+          product: product.id,
+        });
+        const link = await stripe.paymentLinks.create({
+          line_items: [{ price: price.id, quantity: 1 }],
+        });
+        if (body?.crmId) {
+          try {
+            await notion.pages.update({
+              page_id: body.crmId,
+              properties: { 'Stripe Link': { url: link.url } },
+            });
+          } catch (e) {
+            console.error('crm update failed', e);
+          }
+        }
+        await notify('Donation link created', link.url);
+        return ok(res, {
+          link: link.url,
+          priceId: price.id,
+          productId: product.id,
+        });
+      } catch (e) {
+        return bad(res, e?.message || 'Error creating link', 500);
+      }
+    }
 
     // ===== Agent: plan from text =====
     if (pathname === '/api/agent/plan' && method === 'POST') {
