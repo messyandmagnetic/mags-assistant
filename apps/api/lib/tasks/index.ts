@@ -3,6 +3,8 @@ import { syncHQ } from "./notion-sync";
 import { refreshSocialPlanner } from "./social-planner";
 import { sweepReminders } from "./reminders";
 import { triageInbox } from "./inbox";
+import { emailWatch } from "./email-watch";
+import { socialPostDue } from "./social-post";
 
 export type TaskResult = { name: string; ok: boolean; msg?: string };
 export type TaskFn = () => Promise<TaskResult>;
@@ -12,6 +14,8 @@ export const tasks: Record<string, TaskFn> = {
   "social.refresh_planner": refreshSocialPlanner,
   "ops.sweep_reminders": sweepReminders,
   "ops.triage_inbox": triageInbox,
+  "email.watch": emailWatch,
+  "social.post_due": socialPostDue,
 };
 
 const taskFlags: Record<string, string> = {
@@ -19,6 +23,8 @@ const taskFlags: Record<string, string> = {
   "social.refresh_planner": "TASK_SOCIAL_REFRESH",
   "ops.sweep_reminders": "TASK_REMINDERS_SWEEP",
   "ops.triage_inbox": "TASK_INBOX_TRIAGE",
+  "email.watch": "TASK_EMAIL_WATCH",
+  "social.post_due": "TASK_SOCIAL_POST_DUE",
 };
 
 export async function runTasks(selected?: string[]) {
