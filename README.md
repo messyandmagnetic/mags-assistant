@@ -157,9 +157,23 @@ _(coming soon)_
 
 _(coming soon)_
 
-## Stripe audit
+## Stripe ↔ Notion sync
 
-_(coming soon)_
+Endpoint: `/api/stripe/sync`
+
+Modes:
+
+- `mode=audit&dry=1` — report differences without changes.
+- `mode=full&dry=0` — audit and apply fixes.
+
+Environment variables:
+
+- `STRIPE_SECRET_KEY`
+- `NOTION_TOKEN`
+- `PRODUCTS_DB_ID`
+- optional: `RESEND_API_KEY`, `NOTIFY_EMAIL`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+
+Donation products can be added like any other product; create a Notion row with `Type` = `Donation` and amount/tiers as needed.
 
 ## Content planner
 
