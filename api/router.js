@@ -200,6 +200,34 @@ export default async function handler(req, res) {
       return bad(res, 'Method not allowed', 405);
     }
 
+    // ===== Queue: list =====
+    if (pathname === '/api/queue/list' && method === 'GET') {
+      if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
+      const r = await notion.databases.query({
+        database_id: env.NOTION_QUEUE_DB_ID,
+        page_size: 50,
+        sorts: [{ timestamp: 'last_edited_time', direction: 'descending' }],
+      });
+      const results = r.results.map((page) => {
+        const props = page.properties || {};
+        return {
+          id: page.id,
+          title:
+            props.Title?.title?.[0]?.plain_text ||
+            props['Job Name']?.title?.[0]?.plain_text ||
+            'Untitled',
+          status: props.Status?.select?.name || 'Unknown',
+          lastLog:
+            props['Result / Notes']?.rich_text?.map((r) => r.plain_text).join('\n') ||
+            props.Payload?.rich_text?.map((r) => r.plain_text).join('\n') ||
+            '',
+          updated: page.last_edited_time,
+          url: page.url,
+        };
+      });
+      return ok(res, { results });
+    }
+
     // ===== Queue: enqueue =====
     if (pathname === '/api/queue/enqueue' && method === 'POST') {
       if (req.headers['x-mags-key'] !== env.MAGS_KEY) return bad(res, 'Unauthorized', 401);

@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Head from 'next/head';
 import ChatUI from '../../components/ChatUI';
 import { COOKIE_NAME, verifyPassword, passwordEnabled, sessionCookie } from '../../lib/auth';
 
@@ -55,13 +56,18 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col">
-      {warning && (
-        <div className="bg-yellow-100 text-center text-sm p-2">
-          Warning: CHAT_PASSWORD is not set; chat is public.
-        </div>
-      )}
-      <ChatUI />
-    </div>
+    <>
+      <Head>
+        <link rel="stylesheet" href="/brand.css" />
+      </Head>
+      <div className="h-screen flex flex-col">
+        {warning && (
+          <div className="bg-yellow-100 text-center text-sm p-2">
+            Warning: CHAT_PASSWORD is not set; chat is public.
+          </div>
+        )}
+        <ChatUI />
+      </div>
+    </>
   );
 }

@@ -3,6 +3,10 @@ import { Client } from '@notionhq/client';
 export const notion = new Client({ auth: process.env.NOTION_TOKEN! });
 const DB = process.env.NOTION_QUEUE_DB!;
 
+export function getNotion() {
+  return notion;
+}
+
 export function requireEnv(name: string) {
   const v = process.env[name];
   if (!v) throw new Error(`Missing env: ${name}`);

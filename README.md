@@ -10,6 +10,8 @@ Test links:
 - https://mags-assistant.vercel.app/diag
 - https://mags-assistant.vercel.app/health
 - https://mags-assistant.vercel.app/console — simple command console
+- https://mags-assistant.vercel.app/chat — chat with Mags
+- https://mags-assistant.vercel.app/planner — task planner dashboard
 
 Example curl for start:
 
@@ -23,17 +25,28 @@ curl -X POST 'https://mags-assistant.vercel.app/api/rpa?action=start' \
 
 The `/chat` interface requires the following environment variables:
 
-- `OPENAI_API_KEY` – API key for OpenAI requests.
-- `CHAT_PASSWORD` – optional password protecting the chat. If unset, the page warns that auth is disabled.
-- `NOTION_TOKEN` – token for Notion API access.
-- `NOTION_HQ_PAGE_ID` – Notion HQ page ID.
-- `NOTION_QUEUE_DB` – Notion queue database ID.
-- `STRIPE_SECRET_KEY` – Stripe API key.
+```
+OPENAI_API_KEY
+CHAT_PASSWORD
+NOTION_TOKEN
+NOTION_HQ_PAGE_ID
+NOTION_QUEUE_DB
+STRIPE_SECRET_KEY
+RESEND_API_KEY        # optional
+NOTIFY_EMAIL          # optional
+NOTIFY_WEBHOOK        # optional
+BRAND_PRIMARY_HEX     # optional
+BRAND_SECONDARY_HEX   # optional
+TELEGRAM_BOT_TOKEN    # optional
+TELEGRAM_CHAT_ID      # optional
+```
 
 ## Scheduled Tasks (free)
+
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.
 
 ### Configure
+
 - Vercel env:
   - NOTION_TOKEN = <internal integration token>
   - NOTION_ROOT_PAGE_ID = <the HQ page id>
@@ -42,12 +55,14 @@ We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 1
   - NOTION_TOKEN / NOTION_ROOT_PAGE_ID / CRON_SECRET (match Vercel)
 
 ### Endpoints
-- GET /api/notion/diag      → verifies Notion connectivity
-- GET /api/cron/tick?dry=1  → shows which tasks would run
-- GET /api/cron/tick        → runs all tasks
-- GET /api/cron/tick?only=notion.sync_hq&only=social.refresh_planner  → run subset
+
+- GET /api/notion/diag → verifies Notion connectivity
+- GET /api/cron/tick?dry=1 → shows which tasks would run
+- GET /api/cron/tick → runs all tasks
+- GET /api/cron/tick?only=notion.sync_hq&only=social.refresh_planner → run subset
 
 ### Add your own tasks
+
 Create a file in `apps/api/lib/tasks/your-task.ts` that exports `async function myTask()`.
 Add it to `tasks` in `apps/api/lib/tasks/index.ts` with a unique key.
 
