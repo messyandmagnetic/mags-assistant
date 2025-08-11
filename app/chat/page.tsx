@@ -1,6 +1,8 @@
 'use client';
-import ChatUI from '../../components/ChatUI';
+
 import { useEffect, useState } from 'react';
+import ChatUI from '../../components/ChatUI';
+import ClipUploader from '../../components/ClipUploader';
 import { COOKIE_NAME, verifyPassword, sessionCookie } from '../../lib/auth';
 
 export default function ChatPage() {
@@ -8,12 +10,12 @@ export default function ChatPage() {
   const [warning, setWarning] = useState(false);
 
   useEffect(() => {
-    const hasPass = !verifyPassword('');
-    if (!hasPass) {
+    if (!process.env.CHAT_PASSWORD) {
       setAuthed(true);
+      setWarning(true);
       return;
     }
-    setWarning(true);
+
     const params = new URLSearchParams(window.location.search);
     const key = params.get('key');
     if (key && verifyPassword(key)) {
@@ -31,45 +33,31 @@ export default function ChatPage() {
       fetch('/api/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ level: 'read', title: 'chat:read', message: 'clear unread', links: [] }),
+        body: JSON.stringify({ level: 'clear', title: 'chat open' }),
       });
     };
+
     clear();
     window.addEventListener('focus', clear);
     return () => window.removeEventListener('focus', clear);
   }, []);
 
-  const [input, setInput] = useState('');
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
-    if (verifyPassword(input)) {
-      document.cookie = sessionCookie(input);
-      setAuthed(true);
-    }
-  }
-
-  if (!authed && warning) {
-    return (
-      <div className="max-w-sm mx-auto p-4">
-        <form onSubmit={submit} className="flex flex-col gap-2">
-          <input
-            type="password"
-            placeholder="Password"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            className="border p-2"
-          />
-          <button type="submit" className="p-2 bg-black text-white">
-            Enter
-          </button>
-        </form>
-      </div>
-    );
-  }
+  if (!authed) return <div>Enter chat password.</div>;
 
   return (
-    <div className="flex flex-col flex-1">
-      <ChatUI />
-    </div>
+    <main className="mx-auto max-w-3xl p-4 space-y-6">
+      <section>
+        <h1 className="text-2xl mb-2">Upload a clip</h1>
+        <ClipUploader />
+      </section>
+      <section>
+        <h2 className="text-xl mb-2">Chat</h2>
+        <ChatUI />
+      </section>
+      {warning && (
+        <p className="text-xs opacity-70">Password disabled; dev mode.</p>
+      )}
+    </main>
   );
 }
+
