@@ -556,6 +556,16 @@ Output:
       return ok(res, { count: results.length, results });
     }
 
+    // ===== Telegram approvals =====
+    if (pathname === '/api/telegram/approve' && method === 'POST') {
+      const body =
+        req.body && typeof req.body === 'object' ? req.body : await readJson(req);
+      const { id, decision } = body;
+      if (!id || !decision) return bad(res, 'Missing id or decision');
+      // In a full implementation this would update Notion and trigger actions.
+      return ok(res, { id, decision });
+    }
+
     return bad(res, 'Not found', 404);
   } catch (e) {
     console.error(e);

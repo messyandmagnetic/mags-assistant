@@ -5,7 +5,10 @@
   "scripts": {
     "build": "echo \"static + api\"",
     "start": "node server.js || echo \"Using Vercel serverless\"",
-    "test": "node --check api/router.js"
+    "test": "node --check api/router.js",
+    "mags-research": "node scripts/mags-research.js",
+    "stripe-audit": "node scripts/stripe-audit.js",
+    "bot-factory": "node scripts/bot-factory.js"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",

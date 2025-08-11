@@ -19,6 +19,18 @@ curl -X POST 'https://mags-assistant.vercel.app/api/rpa?action=start' \
   -d '{"url":"https://example.com"}'
 ```
 
+## Grant & Donor Automation
+
+Autonomy Core v2 introduces initial hooks for land, grant and donor operations.
+
+- `npm run mags-research` scans for grant and donor leads and logs the configured `NOTION_GRANT_PAGE_ID`.
+- `npm run stripe-audit` checks Stripe donation products against `DONATION_PRODUCTS_DB_ID`.
+
+## Bot Factory & Telegram Approvals
+
+- `npm run bot-factory` showcases generating business bots with configs stored in `BOT_REGISTRY_DB_ID`.
+- `/api/telegram/approve` accepts `{id, decision}` to simulate one-click approvals. Configure `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, and `APPROVAL_MODE`.
+
 ## Chat UI
 
 The `/chat` interface requires the following environment variables:

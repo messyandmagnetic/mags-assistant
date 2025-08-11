@@ -10,6 +10,12 @@ const envSchema = z.object({
   NOTION_HQ_PAGE_ID: z.string().optional(),
   BROWSERLESS_API_KEY: z.string().optional(),
   NOTION_DB_RUNS_ID: z.string().optional(),
+  NOTION_GRANT_PAGE_ID: z.string().optional(),
+  DONATION_PRODUCTS_DB_ID: z.string().optional(),
+  BOT_REGISTRY_DB_ID: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
+  APPROVAL_MODE: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
