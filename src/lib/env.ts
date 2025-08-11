@@ -1,32 +1,36 @@
-type Env = {
-  API_BASE?: string;
-  WORKER_KEY?: string;
-  MAGS_KEY?: string;
-  NOTION_TOKEN?: string;
-  NOTION_DATABASE_ID?: string;
-  NOTION_INBOX_PAGE_ID?: string;
-  NOTION_HQ_PAGE_ID?: string;
-  BROWSERLESS_API_KEY?: string;
-  NOTION_DB_RUNS_ID?: string;
-  OPENAI_API_KEY?: string;
-  CHAT_PASSWORD?: string;
-  NOTION_QUEUE_DB?: string;
-  PRODUCTS_DB_ID?: string;
-  STRIPE_SECRET_KEY?: string;
-  RESEND_API_KEY?: string;
-  NOTIFY_EMAIL?: string;
-  NOTIFY_WEBHOOK?: string;
-  BRAND_PRIMARY_HEX?: string;
-  BRAND_SECONDARY_HEX?: string;
-  TELEGRAM_BOT_TOKEN?: string;
-  TELEGRAM_CHAT_ID?: string;
-  APPROVAL_MODE?: 'strict' | 'normal' | 'free';
-};
+import { z } from 'zod';
 
-export const env = process.env as Env;
+const envSchema = z.object({
+  API_BASE: z.string().optional(),
+  WORKER_KEY: z.string().optional(),
+  MAGS_KEY: z.string().optional(),
+  NOTION_TOKEN: z.string(),
+  NOTION_HQ_PAGE_ID: z.string().optional(),
+  NOTION_INBOX_PAGE_ID: z.string().optional(),
+  NOTION_QUEUE_DB: z.string().optional(),
+  NOTION_DB_RUNS_ID: z.string().optional(),
+  PRODUCTS_DB_ID: z.string().optional(),
+  DONOR_DB_ID: z.string().optional(),
+  OUTREACH_DB_ID: z.string().optional(),
+  CONTENT_DB_ID: z.string().optional(),
+  STRIPE_SECRET_KEY: z.string().optional(),
+  OPENAI_API_KEY: z.string().optional(),
+  CHAT_PASSWORD: z.string().optional(),
+  RESEND_API_KEY: z.string().optional(),
+  NOTIFY_EMAIL: z.string().optional(),
+  NOTIFY_WEBHOOK: z.string().optional(),
+  BRAND_PRIMARY_HEX: z.string().regex(/^#?[0-9A-Fa-f]{6}$/).optional(),
+  BRAND_SECONDARY_HEX: z.string().regex(/^#?[0-9A-Fa-f]{6}$/).optional(),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_CHAT_ID: z.string().optional(),
+  APPROVAL_MODE: z.enum(['strict', 'normal', 'auto']).optional().default('normal'),
+});
 
-export function requireEnv<K extends keyof typeof env>(key: K): string {
+export const env = envSchema.parse(process.env);
+export type Env = z.infer<typeof envSchema>;
+
+export function requireEnv<K extends keyof Env>(key: K): Env[K] {
   const value = env[key];
-  if (!value) throw new Error(`Missing env: ${key}`);
+  if (!value) throw new Error(`Missing env: ${String(key)}`);
   return value;
 }
