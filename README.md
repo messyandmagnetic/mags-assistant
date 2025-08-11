@@ -10,6 +10,7 @@ Test links:
 - https://mags-assistant.vercel.app/diag
 - https://mags-assistant.vercel.app/health
 - https://mags-assistant.vercel.app/console — simple command console
+- https://mags-assistant.vercel.app/chat — chat page
 
 Example curl for start:
 
@@ -31,14 +32,21 @@ The `/chat` interface requires the following environment variables:
 - `STRIPE_SECRET_KEY` – Stripe API key.
 - `RESEND_API_KEY` – optional; API key for sending email notifications.
 - `NOTIFY_EMAIL` – optional email address for notifications.
+- `NOTIFY_WEBHOOK` – optional webhook for outgoing notifications.
 - `BRAND_PRIMARY_HEX` – optional primary color override.
 - `BRAND_SECONDARY_HEX` – optional secondary color override.
+- `TELEGRAM_BOT_TOKEN` – optional; token for Telegram bot notifications.
+- `TELEGRAM_CHAT_ID` – optional; target chat for Telegram notifications.
+- `APPROVAL_MODE` – optional; set `strict`, `normal`, or `free` for message approvals.
 
 ## Notifications & Telegram
 
-- Required: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
-- Optional: `RESEND_API_KEY`, `NOTIFY_EMAIL`
-- Telegram webhook URL: https://assistant.messyandmagnetic.com/api/telegram/webhook
+Configure optional outbound notifications.
+
+- Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to enable Telegram messages.
+- Optionally define `RESEND_API_KEY` and `NOTIFY_EMAIL` for email alerts or `NOTIFY_WEBHOOK` for custom webhooks.
+- Send notifications via `POST /api/notify`.
+- Telegram bots receive updates at `https://assistant.messyandmagnetic.com/api/telegram/webhook`.
 
 ## Scheduled Tasks (free)
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.
@@ -106,26 +114,6 @@ Set these in Repo → Settings → Secrets and variables → Actions:
 2. Click **Run workflow**.
 3. Choose a task (e.g. `sync-stripe-from-notion`) and start with **Dry run** = true.
 4. Inspect the logs, then re-run with **Dry run** = false to apply changes.
-
-## Environment Variables
-
-```
-OPENAI_API_KEY
-CHAT_PASSWORD
-NOTION_TOKEN
-NOTION_HQ_PAGE_ID
-NOTION_QUEUE_DB
-PRODUCTS_DB_ID
-STRIPE_SECRET_KEY
-RESEND_API_KEY          # optional
-NOTIFY_EMAIL            # optional
-NOTIFY_WEBHOOK          # optional
-BRAND_PRIMARY_HEX       # optional
-BRAND_SECONDARY_HEX     # optional
-TELEGRAM_BOT_TOKEN      # optional
-TELEGRAM_CHAT_ID        # optional
-APPROVAL_MODE           # strict | normal | free
-```
 
 ## Unread badge
 
