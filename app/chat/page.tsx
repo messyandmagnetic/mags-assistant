@@ -61,7 +61,7 @@ export default function ChatPage() {
           Warning: CHAT_PASSWORD is not set; chat is public.
         </div>
       )}
-      <ChatUI />
+      <ChatUI title="Mags — Chat" />
     </div>
   );
 }

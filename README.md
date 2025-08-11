@@ -23,17 +23,28 @@ curl -X POST 'https://mags-assistant.vercel.app/api/rpa?action=start' \
 
 The `/chat` interface requires the following environment variables:
 
-- `OPENAI_API_KEY` – API key for OpenAI requests.
-- `CHAT_PASSWORD` – optional password protecting the chat. If unset, the page warns that auth is disabled.
-- `NOTION_TOKEN` – token for Notion API access.
-- `NOTION_HQ_PAGE_ID` – Notion HQ page ID.
-- `NOTION_QUEUE_DB` – Notion queue database ID.
-- `STRIPE_SECRET_KEY` – Stripe API key.
-- `RESEND_API_KEY` – optional; API key for sending email notifications.
-- `NOTIFY_EMAIL` – optional email address for notifications.
-- `NOTIFY_WEBHOOK` – optional Slack/Discord webhook for notifications.
-- `BRAND_PRIMARY_HEX` – optional primary color override.
-- `BRAND_SECONDARY_HEX` – optional secondary color override.
+```
+OPENAI_API_KEY
+CHAT_PASSWORD
+NOTION_TOKEN
+NOTION_HQ_PAGE_ID
+NOTION_QUEUE_DB
+STRIPE_SECRET_KEY
+RESEND_API_KEY          # optional
+NOTIFY_EMAIL            # optional
+NOTIFY_WEBHOOK          # optional
+BRAND_PRIMARY_HEX       # optional
+BRAND_SECONDARY_HEX     # optional
+TELEGRAM_BOT_TOKEN      # optional
+TELEGRAM_CHAT_ID        # optional
+```
+
+## Notifications & Telegram
+
+Optional notifications can be sent via email or webhooks when
+`RESEND_API_KEY` is supplied along with a target `NOTIFY_EMAIL` or
+`NOTIFY_WEBHOOK`.
+For Telegram alerts, set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
 
 ## Scheduled Tasks (free)
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.

@@ -1,4 +1,7 @@
-import { getNotion } from '../../lib/clients/notion';
+import { getNotion } from '../../lib/notion';
+import { Inter, Fraunces } from 'next/font/google';
+const inter = Inter({ subsets: ['latin'] });
+const fraunces = Fraunces({ subsets: ['latin'] });
 
 function readProp(page: any, name: string) {
   const prop = page.properties[name];
@@ -24,31 +27,38 @@ export default async function PlannerPage() {
   const order = ['Queue', 'Running', 'Done'];
 
   return (
-    <div className="p-4 flex gap-4 overflow-x-auto">
-      {order.map((key) => (
-        <div key={key} className="min-w-[250px] flex-1">
-          <h2 className="mb-2 font-serif text-lg">{key}</h2>
-          <div className="space-y-2">
-            {cols[key]?.map((p) => {
-              const title = readProp(p, 'Task');
-              const last = readProp(p, 'Last Log') || readProp(p, 'Last Error');
-              const updated = readProp(p, 'Last Updated') || readProp(p, 'Date Updated') || '';
-              return (
-                <a
-                  key={p.id}
-                  href={p.url}
-                  target="_blank"
-                  className="block bg-white rounded shadow p-2 border"
-                >
-                  <div className="font-medium">{title}</div>
-                  {last && <div className="text-sm text-gray-600">{last}</div>}
-                  {updated && <div className="text-xs text-gray-400">{updated}</div>}
-                </a>
-              );
-            })}
+    <div className={`${inter.className} p-4`}>
+      <div className="text-right mb-4 text-sm">
+        <a href="/chat" className="underline">
+          Chat
+        </a>
+      </div>
+      <div className="flex gap-4 overflow-x-auto">
+        {order.map((key) => (
+          <div key={key} className="min-w-[250px] flex-1">
+            <h2 className={`${fraunces.className} mb-2 text-lg`}>{key}</h2>
+            <div className="space-y-2">
+              {cols[key]?.map((p) => {
+                const title = readProp(p, 'Task');
+                const last = readProp(p, 'Last Log') || readProp(p, 'Last Error');
+                const updated = readProp(p, 'Last Updated') || readProp(p, 'Date Updated') || '';
+                return (
+                  <a
+                    key={p.id}
+                    href={p.url}
+                    target="_blank"
+                    className="block bg-white rounded shadow p-2 border"
+                  >
+                    <div className="font-medium">{title}</div>
+                    {last && <div className="text-sm text-gray-600">{last}</div>}
+                    {updated && <div className="text-xs text-gray-400">{updated}</div>}
+                  </a>
+                );
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }
