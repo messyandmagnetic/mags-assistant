@@ -175,6 +175,41 @@ Environment variables:
 
 Donation products can be added like any other product; create a Notion row with `Type` = `Donation` and amount/tiers as needed.
 
+## Notion Stripe schema
+
+The Stripe products database enforces the following properties:
+
+| Property | Type |
+| --- | --- |
+| Name | title |
+| Description | rich_text |
+| Type | select (one-time, recurring, donation) |
+| Price | number |
+| Currency | select |
+| Interval | select (day, week, month, year) |
+| Active | checkbox |
+| Statement Descriptor | rich_text |
+| Tax Behavior | select (inclusive, exclusive, unspecified) |
+| Tax Code | rich_text |
+| Metadata | rich_text |
+| Image Folder | rich_text |
+| Stripe Product ID | rich_text |
+| Stripe Price ID | rich_text |
+| Date Updated | date |
+| Status | select (To Do, In Progress, Ready to Add, Added in Stripe, Needs Edit) |
+
+If a property exists with the wrong type, the old property is renamed with a `(legacy)` suffix and a new `(fixed)` property is created.
+
+```sh
+# Ensure database schema
+curl -X POST "$API_BASE/api/notion/ensure-stripe-schema" \
+  -H "X-Worker-Key: $WORKER_KEY"
+
+# Backfill missing defaults
+curl -X POST "$API_BASE/api/notion/backfill-defaults" \
+  -H "X-Worker-Key: $WORKER_KEY"
+```
+
 ## Content planner
 
 _(coming soon)_
