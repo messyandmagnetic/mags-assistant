@@ -11,8 +11,10 @@ Test links:
 - https://mags-assistant.vercel.app/health
 - https://mags-assistant.vercel.app/console — simple command console
 - https://mags-assistant.vercel.app/chat — chat page
+- https://mags-assistant.vercel.app/studio — studio page
+- https://mags-assistant.vercel.app/planner — planner page
 
-Example curl for start:
+Example curl for /start:
 
 ```sh
 curl -X POST 'https://mags-assistant.vercel.app/api/rpa?action=start' \
@@ -29,6 +31,10 @@ The `/chat` interface requires the following environment variables:
 - `NOTION_TOKEN` – token for Notion API access.
 - `NOTION_HQ_PAGE_ID` – Notion HQ page ID.
 - `NOTION_QUEUE_DB` – Notion queue database ID.
+- `PRODUCTS_DB_ID` – Notion database ID for Stripe products.
+- `DONOR_DB_ID` – Notion database ID for donor tracking.
+- `OUTREACH_DB_ID` – Notion database ID for outreach tracking.
+- `CONTENT_DB_ID` – Notion database ID for content planning.
 - `STRIPE_SECRET_KEY` – Stripe API key.
 - `RESEND_API_KEY` – optional; API key for sending email notifications.
 - `NOTIFY_EMAIL` – optional email address for notifications.
@@ -37,7 +43,7 @@ The `/chat` interface requires the following environment variables:
 - `BRAND_SECONDARY_HEX` – optional secondary color override.
 - `TELEGRAM_BOT_TOKEN` – optional; token for Telegram bot notifications.
 - `TELEGRAM_CHAT_ID` – optional; target chat for Telegram notifications.
-- `APPROVAL_MODE` – optional; set `strict`, `normal`, or `free` for message approvals.
+- `APPROVAL_MODE` – optional; set `strict`, `normal`, or `auto` for message approvals.
 
 ## Notifications & Telegram
 
@@ -46,7 +52,8 @@ Configure optional outbound notifications.
 - Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to enable Telegram messages.
 - Optionally define `RESEND_API_KEY` and `NOTIFY_EMAIL` for email alerts or `NOTIFY_WEBHOOK` for custom webhooks.
 - Send notifications via `POST /api/notify`.
-- Telegram bots receive updates at `https://assistant.messyandmagnetic.com/api/telegram/webhook`.
+- Telegram webhook URL: https://assistant.messyandmagnetic.com/api/telegram
+- Approval webhook: https://assistant.messyandmagnetic.com/api/approve
 
 ### Telegram approvals
 
@@ -125,6 +132,14 @@ Set these in Repo → Settings → Secrets and variables → Actions:
 ## Unread badge
 
 `GET /api/chat/unread` returns `{ count }`. The header and dashboard poll this endpoint every 30s and show a red badge on the Chat link when the count is greater than zero. Opening `/chat` clears the count.
+
+## Planner
+
+The planner at `/planner` shows queued, running, and completed jobs from Notion.
+
+## Studio
+
+The video studio at `/studio` trims clips and exports MP4 or SRT files.
 
 ## Research
 
