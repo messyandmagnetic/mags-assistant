@@ -1,0 +1,29 @@
+name: stripe-sync
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Plan
+        id: plan
+        run: |
+          resp=$(curl -sS "$API_BASE/api/stripe/sync/plan" -H "X-Worker-Key: $WORKER_KEY")
+          echo "$resp"
+          echo "$resp" > plan.json
+          changes=$(node -e "const p=require('./plan.json');const s=p.summary||{};console.log((s.toCreate||0)+(s.toUpdate||0)+(s.toPriceCreate||0)+(s.toImageAttach||0))")
+          echo "changes=$changes" >> $GITHUB_OUTPUT
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
+      - name: Run
+        if: steps.plan.outputs.changes != '0'
+        run: |
+          curl -sS -X POST "$API_BASE/api/stripe/sync/run" -H "X-Worker-Key: $WORKER_KEY"
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          WORKER_KEY: ${{ secrets.WORKER_KEY }}
