@@ -7,6 +7,7 @@
     "start": "node server.js || echo \"Using Vercel serverless\"",
     "test": "node --check api/router.js"
   },
+  "workspaces": ["site"],
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "openai": "^4.0.0",

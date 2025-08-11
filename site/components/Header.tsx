@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import Button from './Button';
 
 export default function Header() {
   return (
@@ -8,16 +9,12 @@ export default function Header() {
       </Link>
       <nav className="hidden space-x-4 md:block">
         <Link href="/about" className="hover:text-brand-sage">About</Link>
-        <Link href="/shop" className="hover:text-brand-sage">Shop</Link>
         <Link href="/donate" className="hover:text-brand-sage">Donate</Link>
         <Link href="/contact" className="hover:text-brand-sage">Contact</Link>
       </nav>
-      <Link
-        href="/chat"
-        className="ml-4 rounded-md bg-brand-sage px-3 py-2 text-sm text-white"
-      >
+      <Button href="/chat" className="ml-4 text-sm">
         Chat
-      </Link>
+      </Button>
     </header>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Button from './Button';
 
 export default function ContactForm() {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -9,13 +10,14 @@ export default function ContactForm() {
     e.preventDefault();
     setStatus('loading');
     const formData = new FormData(e.currentTarget);
-    const res = await fetch('/api/contact', {
+    const res = await fetch('/api/notify', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: formData.get('name'),
-        email: formData.get('email'),
-        message: formData.get('message'),
+        level: 'info',
+        title: 'Contact form',
+        message: `From ${formData.get('name')} (${formData.get('email')}): ${formData.get('message')}`,
+        links: [],
       }),
     });
     if (res.ok) {
@@ -49,13 +51,9 @@ export default function ContactForm() {
         className="w-full rounded-md border border-brand-sage px-3 py-2"
         rows={4}
       />
-      <button
-        type="submit"
-        disabled={status === 'loading'}
-        className="rounded-md bg-brand-sage px-4 py-2 text-white"
-      >
+      <Button type="submit" disabled={status === 'loading'}>
         {status === 'loading' ? 'Sending...' : 'Send'}
-      </button>
+      </Button>
       {status === 'success' && (
         <p className="text-green-600">Thanks! We&apos;ll be in touch.</p>
       )}
