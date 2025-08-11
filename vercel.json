@@ -1,9 +1,9 @@
 {
+  "version": 2,
+  "builds": [
+    { "src": "next.config.js", "use": "@vercel/next" }
+  ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/router.js" },
-    { "src": "/watch", "dest": "/watch.html" },
-    { "src": "/studio", "dest": "/studio.html" },
-    { "src": "/planner", "dest": "/planner.html" },
-    { "src": "/mags", "dest": "/mags.html" }
+    { "src": "/(.*)", "dest": "/" }
   ]
 }
