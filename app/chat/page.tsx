@@ -26,6 +26,19 @@ export default function ChatPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const clear = () => {
+      fetch('/api/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ level: 'info', title: 'read', message: '' }),
+      });
+    };
+    clear();
+    window.addEventListener('focus', clear);
+    return () => window.removeEventListener('focus', clear);
+  }, []);
+
   const [input, setInput] = useState('');
   function submit(e: React.FormEvent) {
     e.preventDefault();

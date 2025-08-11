@@ -1,41 +1,44 @@
-import { getStripe } from './clients/stripe';
-import { getNotion } from './clients/notion';
+import { getNotion } from './client';
 
-export async function syncStripeNotion({ mode }: { mode: 'pull' | 'push' | 'twoWay' }) {
-  // TODO: implement actual sync
-  return { ok: true, mode };
+export async function syncStripeNotion() {
+  // TODO placeholder; returns {ok:true}
+  return { ok: true };
 }
 
-export async function genProductImage({ productId, promptOverride }: { productId: string; promptOverride?: string }) {
-  // TODO: call DALL·E and upload to Stripe + Notion
-  return { ok: true, productId, prompt: promptOverride };
+export async function genProductImages() {
+  // TODO placeholder; returns {ok:true}
+  return { ok: true };
 }
 
-export async function auditStripe({ fix, scope }: { fix?: boolean; scope?: 'all' | 'changed' | 'missing' }) {
-  // TODO: audit Stripe products
-  return { ok: true, fix: !!fix, scope: scope ?? 'all' };
+export async function auditStripe() {
+  // TODO placeholder; returns {ok:true, fix:true}
+  return { ok: true, fix: true };
 }
 
-export async function createNotionTask({ title, details, status }: { title: string; details: string; status?: string }) {
+export async function createNotionTask(title: string, details: string) {
   const notion = getNotion();
   const db = process.env.NOTION_QUEUE_DB!;
   await notion.pages.create({
     parent: { database_id: db },
     properties: {
       Task: { title: [{ text: { content: title } }] },
-      Status: { select: { name: status || 'Draft' } },
+      Status: { select: { name: 'Draft' } },
       Details: { rich_text: [{ text: { content: details } }] },
     },
   });
   return { ok: true };
 }
 
-export async function notify({ level, title, message, links }: { level: string; title: string; message: string; links?: any[] }) {
-  const text = `[${level}] ${title}: ${message}${links?.length ? ' ' + links.join(' ') : ''}`;
+export async function notify(opts: {
+  level?: 'info' | 'warn' | 'error';
+  title: string;
+  message: string;
+  links?: string[];
+  approveId?: string;
+}) {
   await fetch('/api/notify', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text }),
+    body: JSON.stringify(opts),
   });
-  return { ok: true };
 }

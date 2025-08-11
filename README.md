@@ -21,24 +21,29 @@ curl -X POST 'https://mags-assistant.vercel.app/api/rpa?action=start' \
 
 ## Chat UI
 
-The `/chat` interface requires the following environment variables:
+The `/chat` interface requires these env vars:
 
-- `OPENAI_API_KEY` – API key for OpenAI requests.
-- `CHAT_PASSWORD` – optional password protecting the chat. If unset, the page warns that auth is disabled.
-- `NOTION_TOKEN` – token for Notion API access.
-- `NOTION_HQ_PAGE_ID` – Notion HQ page ID.
-- `NOTION_QUEUE_DB` – Notion queue database ID.
-- `STRIPE_SECRET_KEY` – Stripe API key.
-- `RESEND_API_KEY` – optional; API key for sending email notifications.
-- `NOTIFY_EMAIL` – optional email address for notifications.
-- `BRAND_PRIMARY_HEX` – optional primary color override.
-- `BRAND_SECONDARY_HEX` – optional secondary color override.
+```
+OPENAI_API_KEY
+CHAT_PASSWORD
+NOTION_TOKEN
+NOTION_HQ_PAGE_ID
+NOTION_QUEUE_DB
+STRIPE_SECRET_KEY
+
+# optional notifications / branding
+RESEND_API_KEY
+NOTIFY_EMAIL
+NOTIFY_WEBHOOK
+BRAND_PRIMARY_HEX
+BRAND_SECONDARY_HEX
+TELEGRAM_BOT_TOKEN
+TELEGRAM_CHAT_ID
+```
 
 ## Notifications & Telegram
 
-- Required: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
-- Optional: `RESEND_API_KEY`, `NOTIFY_EMAIL`
-- Telegram webhook URL: https://assistant.messyandmagnetic.com/api/telegram/webhook
+When `/api/notify` is called, the assistant can send emails via Resend and Telegram messages. Telegram messages include one‑click **Approve** and **View** buttons. Approved actions are sent to `/api/action` with `{ id, action }` and require `Authorization: Bearer $CHAT_PASSWORD`.
 
 ## Scheduled Tasks (free)
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.
@@ -75,12 +80,6 @@ The current schedule runs every 10 minutes.
 ## Maggie Job Queue
 
 Automated jobs for Maggie are tracked in a Notion database named **Maggie Job Queue** under the HQ page.
-
-### Required environment variables
-
-- `NOTION_TOKEN` – Notion internal integration token
-- `NOTION_HQ_PAGE_ID` – parent page where the queue database lives
-- `NOTION_QUEUE_DB` – database ID of "Maggie Job Queue" (created on first seed)
 
 ### Reseed
 

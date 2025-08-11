@@ -32,3 +32,12 @@ jobs:
             -H "content-type: application/json" \
             -d '{}' \
             | tee social.json
+      - name: Planner daily summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -X POST "$API_BASE/api/cron/nightly" \
+            -H "x-mags-key: $CRON_SECRET" \
+            -H "content-type: application/json" \
+            -d '{}' \
+            | tee planner.json

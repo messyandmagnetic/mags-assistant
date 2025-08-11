@@ -2,8 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 
 const palette = {
-  sage: '#9BB5A3',
-  blush: '#E8C8C3',
+  // brandable overrides from env (if present)
+  sage: process.env.BRAND_PRIMARY_HEX || '#9BB5A3',
+  blush: process.env.BRAND_SECONDARY_HEX || '#E8C8C3',
+  // neutrals (don’t change)
   cream: '#FBF6EF',
   charcoal: '#2B2B2B',
   gold: '#D8B26E',
@@ -81,10 +83,25 @@ export default function ChatUI() {
   }
 
   const quick = [
-    { label: 'Sync Stripe ↔ Notion (two-way)', prompt: 'Sync Stripe and Notion (two-way)' },
-    { label: 'Generate on-brand image for selected product', prompt: 'Generate on-brand image for selected product' },
-    { label: 'Audit Stripe products (propose fixes)', prompt: 'Audit Stripe products and propose fixes' },
-    { label: 'Create Notion task from this chat', prompt: 'Create a Notion task from this chat' },
+    {
+      label: 'Sync Stripe ↔ Notion',
+      prompt:
+        'Sync Stripe and Notion product catalog, reconcile by name/sku, update Notion rows with Stripe price IDs and product images where missing.',
+    },
+    {
+      label: 'Generate on-brand images',
+      prompt:
+        'Generate product/cover images in Messy & Magnetic aesthetic using DALL·E prompts, upload to Stripe + Notion.',
+    },
+    {
+      label: 'Audit Stripe products',
+      prompt:
+        'Audit Stripe product/price metadata, tax codes, shippable, statement descriptors, and advanced settings; produce fixes and apply.',
+    },
+    {
+      label: 'Create Notion task for me',
+      prompt: 'Create a Notion task with status Draft and details from this conversation.',
+    },
   ];
 
   return (

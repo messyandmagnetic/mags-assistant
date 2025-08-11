@@ -40,13 +40,9 @@
 
   <div class="card">
     <h2>Chat with Assistant</h2>
-    <p>Ask questions, get updates, and manage tasks through your AI assistant.</p>
-    <a class="button" href="/chat">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:24px;height:24px;vertical-align:middle;margin-right:4px">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a2.25 2.25 0 002.25 2.25h3L9 21l3-3h5.25A2.25 2.25 0 0019.5 15V6.75A2.25 2.25 0 0017.25 4.5h-12A2.25 2.25 0 003 6.75V15z" />
-      </svg>
-      Open Chat
-    </a>
+    <div class="button-row">
+      <a class="button" href="/chat">Chat <span id="chat-unread" class="badge" style="display:none">●</span></a>
+    </div>
   </div>
 </div>
 <script>
@@ -64,6 +60,18 @@
   }
   document.querySelectorAll('[data-ping]').forEach(ping);
 })();
+</script>
+<script>
+async function pollUnread(){
+  try{
+    const r = await fetch('/api/notify');
+    const j = await r.json();
+    const badge = document.getElementById('chat-unread');
+    if (badge) badge.style.display = j.level && j.level !== 'info' ? 'inline' : 'none';
+  }catch{}
+}
+pollUnread();
+setInterval(pollUnread,15000);
 </script>
 <script src="/watch.js"></script>
 </body>
