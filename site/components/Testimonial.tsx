@@ -1,10 +1,10 @@
 export default function Testimonial() {
   return (
     <section className="py-12 text-center">
-      <blockquote className="mx-auto max-w-prose italic text-brand-ink/80">
-        &ldquo;Mags&rsquo; creations bring warmth and charm to my home.&rdquo;
+      <blockquote className="mx-auto w-prose italic text-brand-ink/80">
+        “Mags’ creations feel like a hug—beautiful, warm, and intentional.”
       </blockquote>
-      <p className="mt-4 font-heading">— Happy Customer</p>
+      <p className="mt-4 font-heading text-right">Happy Customer</p>
     </section>
   );
 }
