@@ -16,7 +16,7 @@ export default function Header() {
         href="/chat"
         className="ml-4 rounded-md bg-brand-sage px-3 py-2 text-sm text-white"
       >
-        Chat with Mags
+        Chat
       </Link>
     </header>
   );
