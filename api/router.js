@@ -24,6 +24,8 @@ import {
 } from '../lib/command-center.js';
 import { runHandler } from '../lib/handlers.js';
 import { getStripe } from '../lib/clients/stripe.js';
+import { getStorage } from '../lib/storage.ts';
+import { spawnSync } from 'child_process';
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -113,6 +115,17 @@ export default async function handler(req, res) {
           hq: !!env.NOTION_HQ_PAGE_ID,
         },
       });
+    }
+
+    if (pathname === '/api/diag/media' && method === 'GET') {
+      const ff = spawnSync('ffmpeg', ['-version']);
+      const storage = getStorage();
+      let storageOk = false;
+      try {
+        await storage.put(Buffer.from('ok'), 'diag/test.txt');
+        storageOk = await storage.exists('diag/test.txt');
+      } catch {}
+      return ok(res, { ffmpeg: ff.status === 0, storage: storageOk });
     }
 
     // ===== Commands: run =====
