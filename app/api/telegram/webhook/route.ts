@@ -14,6 +14,32 @@ export async function POST(req: NextRequest) {
   try {
     const update = await req.json();
     const allowed = process.env.TELEGRAM_CHAT_ID;
+
+    if (update.callback_query) {
+      const chatId = String(update.callback_query.message?.chat?.id ?? '');
+      if (allowed && chatId === String(allowed)) {
+        try {
+          const data = JSON.parse(update.callback_query.data || '{}');
+          await fetch(`${process.env.API_BASE ?? ''}/api/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+        } catch {}
+      }
+      try {
+        await fetch(
+          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ callback_query_id: update.callback_query.id }),
+          }
+        );
+      } catch {}
+      return NextResponse.json({ ok: true });
+    }
+
     const msg = update.message ?? update.edited_message;
     const chatId = String(msg?.chat?.id ?? '');
     const text: string = msg?.text ?? '';
