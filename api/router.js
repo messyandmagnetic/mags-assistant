@@ -26,6 +26,7 @@ import { runHandler } from '../lib/handlers.js';
 import { getStripe } from '../lib/clients/stripe.js';
 import { getStorage } from '../lib/storage.ts';
 import { spawnSync } from 'child_process';
+import { ensureStripeSchema, backfillDefaults } from '../lib/notion-stripe.js';
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -225,10 +226,10 @@ export default async function handler(req, res) {
 
     // ===== Queue: enqueue =====
     if (pathname === '/api/queue/enqueue' && method === 'POST') {
-      if (req.headers['x-mags-key'] !== env.MAGS_KEY) return bad(res, 'Unauthorized', 401);
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
       if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
       const data = await readJson(req).catch(() => ({}));
-      const payload = data?.payload ?? {};
+      const payload = data.payload ? data.payload : data;
       const jobId = `job_${Date.now()}`;
       const page = await enqueueTask({ jobId, payload });
       return ok(res, { id: jobId, pageId: page?.id ?? null });
@@ -486,6 +487,20 @@ Output:
         ],
       });
       return ok(res, { appended: true });
+    }
+
+    // ===== Notion: ensure Stripe schema =====
+    if (pathname === '/api/notion/ensure-stripe-schema' && method === 'POST') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      const r = await ensureStripeSchema();
+      return ok(res, r);
+    }
+
+    // ===== Notion: backfill defaults =====
+    if (pathname === '/api/notion/backfill-defaults' && method === 'POST') {
+      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
+      const r = await backfillDefaults();
+      return ok(res, r);
     }
 
     // ===== Notion: Tasks (database) =====
