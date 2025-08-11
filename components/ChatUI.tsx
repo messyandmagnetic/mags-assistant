@@ -46,7 +46,9 @@ export default function ChatUI() {
   const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    const assistantCount = messages.filter((m) => m.role === 'assistant').length;
     localStorage.setItem('mags-chat-history', JSON.stringify(messages));
+    localStorage.setItem('mags-chat-read-count', String(assistantCount));
     listRef.current?.scrollTo(0, listRef.current.scrollHeight);
   }, [messages]);
 

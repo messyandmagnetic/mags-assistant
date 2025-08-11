@@ -9,6 +9,7 @@ a.button,button.button{display:inline-block;background:#fff;border:1px solid var
 a.button:hover,button.button:hover{background:var(--cream);transform:translateY(-1px);box-shadow:0 4px 14px var(--shadow)}
 a.button:focus,button.button:focus,input:focus,select:focus{outline:3px solid var(--focus);outline-offset:1px}
 .badge{display:inline-flex;align-items:center;font-size:12px;padding:4px 8px;border-radius:20px;background:var(--lavender);color:#fff}
+.badge.unread{background:#dc2626;min-width:18px;height:18px;padding:0 6px;border-radius:999px;justify-content:center;line-height:18px}
 hr{border:0;height:1px;background:var(--smoke);margin:16px 0}
 input[type="text"],input[type="url"],input[type="file"],select{background:#fff;border:1px solid var(--smoke);border-radius:10px;padding:10px 12px;color:var(--ink)}
 label{display:inline-flex;gap:8px;align-items:center;margin:6px 10px 6px 0}

@@ -37,6 +37,16 @@
       <a class="button" href="/planner">Planner</a>
     </div>
   </div>
+
+  <div class="card">
+    <h2>Chat with Assistant</h2>
+    <div class="button-row">
+      <a class="button" href="/chat" id="chat-card" style="position:relative">
+        Chat
+        <span id="chat-unread" class="badge unread" style="position:absolute;top:-6px;right:-6px;display:none"></span>
+      </a>
+    </div>
+  </div>
 </div>
 <script>
 (function(){
@@ -52,6 +62,28 @@
     } catch {}
   }
   document.querySelectorAll('[data-ping]').forEach(ping);
+})();
+</script>
+<script>
+(function(){
+  const badge = document.getElementById('chat-unread');
+  function update(){
+    try{
+      const history = JSON.parse(localStorage.getItem('mags-chat-history') || '[]');
+      const read = Number(localStorage.getItem('mags-chat-read-count') || '0');
+      const unread = history.filter((m) => m.role === 'assistant').length - read;
+      if(unread > 0){
+        badge.textContent = unread > 99 ? '99+' : String(unread);
+        badge.style.display = 'flex';
+      }else{
+        badge.style.display = 'none';
+      }
+    }catch{
+      badge.style.display = 'none';
+    }
+  }
+  update();
+  window.addEventListener('storage', update);
 })();
 </script>
 <script src="/watch.js"></script>
