@@ -29,16 +29,25 @@ The `/chat` interface requires the following environment variables:
 - `NOTION_HQ_PAGE_ID` – Notion HQ page ID.
 - `NOTION_QUEUE_DB` – Notion queue database ID.
 - `STRIPE_SECRET_KEY` – Stripe API key.
+- `PRODUCTS_DB_ID` – Notion database ID for Stripe products.
+- `DONOR_DB_ID` – Notion database ID for the Grants & Donors CRM.
+- `OUTREACH_DB_ID` – Notion database ID for Outreach Runs.
+- `CONTENT_DB_ID` – Notion database ID for the Social Content Queue.
 - `RESEND_API_KEY` – optional; API key for sending email notifications.
 - `NOTIFY_EMAIL` – optional email address for notifications.
+- `NOTIFY_WEBHOOK` – optional webhook for Slack/Discord notifications.
 - `BRAND_PRIMARY_HEX` – optional primary color override.
 - `BRAND_SECONDARY_HEX` – optional secondary color override.
+- `TELEGRAM_BOT_TOKEN` – optional Telegram bot token.
+- `TELEGRAM_CHAT_ID` – optional Telegram chat ID.
+- `APPROVAL_MODE` – optional; 'strict' | 'normal' | 'free'.
 
 ## Notifications & Telegram
 
 - Required: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
-- Optional: `RESEND_API_KEY`, `NOTIFY_EMAIL`
+- Optional: `RESEND_API_KEY`, `NOTIFY_EMAIL`, `NOTIFY_WEBHOOK`
 - Telegram webhook URL: https://assistant.messyandmagnetic.com/api/telegram/webhook
+- Approval webhook: https://assistant.messyandmagnetic.com/api/approve
 
 ## Scheduled Tasks (free)
 We run a free scheduler using GitHub Actions that calls `/api/cron/tick` every 15 minutes.
@@ -116,6 +125,9 @@ NOTION_TOKEN
 NOTION_HQ_PAGE_ID
 NOTION_QUEUE_DB
 PRODUCTS_DB_ID
+DONOR_DB_ID
+OUTREACH_DB_ID
+CONTENT_DB_ID
 STRIPE_SECRET_KEY
 RESEND_API_KEY          # optional
 NOTIFY_EMAIL            # optional

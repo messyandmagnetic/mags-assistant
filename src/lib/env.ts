@@ -20,6 +20,9 @@ type Env = {
   BRAND_SECONDARY_HEX?: string;
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
+  DONOR_DB_ID?: string;
+  OUTREACH_DB_ID?: string;
+  CONTENT_DB_ID?: string;
   APPROVAL_MODE?: 'strict' | 'normal' | 'free';
 };
 
