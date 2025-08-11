@@ -3,7 +3,7 @@ name: mags-cron
 on:
   workflow_dispatch:
   schedule:
-    - cron: "*/3 * * * *"
+    - cron: "*/10 * * * *"
 
 jobs:
   run:
@@ -22,3 +22,13 @@ jobs:
             -H "content-type: application/json" \
             -d '{}' \
             | tee scan.json
+      - name: Run due social posts
+        if: env.API_BASE == 'https://mags-assistant.vercel.app'
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -X POST "$API_BASE/api/social/run-due" \
+            -H "x-mags-key: $CRON_SECRET" \
+            -H "content-type: application/json" \
+            -d '{}' \
+            | tee social.json

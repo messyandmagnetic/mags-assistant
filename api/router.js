@@ -13,6 +13,7 @@ import {
 import { planFromText } from '../lib/agent/planner.js';
 import { runPlan } from '../lib/agent/executor.js';
 import { env } from '../lib/env.js';
+import { getProvider, getConfiguredProviders } from '../lib/social/index.js';
 import {
   addCommand,
   getCommand,
@@ -66,6 +67,27 @@ async function readJson(req) {
   } catch {
     return {};
   }
+}
+
+async function notify(subject, message) {
+  const key = process.env.RESEND_API_KEY;
+  const to = process.env.NOTIFY_EMAIL;
+  if (!key || !to) return;
+  try {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${key}`,
+      },
+      body: JSON.stringify({
+        from: 'Mags <noreply@messyandmagnetic.com>',
+        to: [to],
+        subject,
+        text: message,
+      }),
+    });
+  } catch {}
 }
 
 export const config = { runtime: 'nodejs' };
@@ -485,6 +507,66 @@ Output:
       }
 
       return bad(res, 'Method not allowed', 405);
+    }
+
+    // ===== Social: diag =====
+    if (pathname === '/api/social/diag' && method === 'GET') {
+      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+      return ok(res, { providers: getConfiguredProviders() });
+    }
+
+    // ===== Social: run due =====
+    if (pathname === '/api/social/run-due' && method === 'POST') {
+      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
+      const databaseId = env.NOTION_SOCIAL_DB;
+      if (!databaseId) return bad(res, 'No NOTION_SOCIAL_DB set', 501);
+      const now = new Date().toISOString();
+      const r = await notion.databases.query({
+        database_id: databaseId,
+        filter: {
+          and: [
+            { property: 'Status', status: { equals: 'Scheduled' } },
+            { property: 'Scheduled At', date: { on_or_before: now } },
+          ],
+        },
+        page_size: 25,
+      });
+      const results = [];
+      for (const page of r.results) {
+        const props = page.properties || {};
+        const platform = props['Platform']?.select?.name;
+        const caption = (props['Caption']?.rich_text || [])
+          .map((t) => t.plain_text)
+          .join('');
+        const linkUrl = props['LinkURL']?.url || '';
+        const mediaUrl = props['AssetURL']?.url || '';
+        const postFn = getProvider(platform);
+        let okPost = false;
+        let response = 'no provider';
+        try {
+          if (postFn) {
+            response = await postFn({ caption, mediaUrl, linkUrl });
+            okPost = response !== 'not configured';
+          }
+        } catch (e) {
+          response = e.message || String(e);
+        }
+        await notion.pages.update({
+          page_id: page.id,
+          properties: {
+            Status: { status: { name: okPost ? 'Posted' : 'Failed' } },
+            ResultLog: {
+              rich_text: [{ text: { content: String(response).slice(0, 2000) } }],
+            },
+          },
+        });
+        await notify(
+          `${platform} ${okPost ? 'posted' : 'failed'}`,
+          String(response)
+        );
+        results.push({ id: page.id, ok: okPost, response });
+      }
+      return ok(res, { count: results.length, results });
     }
 
     return bad(res, 'Not found', 404);
