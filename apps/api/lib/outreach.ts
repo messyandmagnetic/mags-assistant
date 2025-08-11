@@ -1,9 +1,27 @@
-export async function seedOutreach() {
-  // Stub: would research target and draft email.
-  return { ok: true, drafted: false };
+// Grant and donor outreach helpers
+
+export async function collectGrantLeads() {
+  // Placeholder: search public sources or spreadsheets for new grants or donors
+  return [] as any[];
+}
+
+export async function createOutreachPackage(_lead: any) {
+  // Placeholder: assemble cover letter, PDF overview, and donation links
+  return { ok: true };
+}
+
+export async function logOutreach(_lead: any, _result: any) {
+  // Placeholder: log outreach attempts and responses in Notion
+  return { ok: true };
 }
 
 export async function runOutreach() {
-  // Stub: would iterate over targets and call seedOutreach for each.
-  return { ok: true, processed: 0 };
+  const leads = await collectGrantLeads();
+  let processed = 0;
+  for (const lead of leads) {
+    const pkg = await createOutreachPackage(lead);
+    await logOutreach(lead, pkg);
+    processed++;
+  }
+  return { ok: true, processed };
 }
