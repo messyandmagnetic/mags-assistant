@@ -14,6 +14,24 @@ Test links:
 - https://mags-assistant.vercel.app/studio — studio page
 - https://mags-assistant.vercel.app/planner — planner page
 
+## /site (marketing app)
+
+The marketing website lives in the `/site` directory.
+
+### Run locally
+
+```sh
+pnpm install
+pnpm --filter site dev
+# or using npm workspaces
+npm install
+npm --workspace site run dev
+```
+
+### Deployment
+
+Deploy `/site` as a separate Vercel project with **Root Directory** set to `site` (see `vercel.json` for monorepo settings).
+
 Example curl for /start:
 
 ```sh

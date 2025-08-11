@@ -1,4 +1,8 @@
 {
+  "projects": {
+    "assistant": { "rootDirectory": "." },
+    "marketing": { "rootDirectory": "site" }
+  },
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/router.js" },
     { "src": "/watch", "dest": "/watch.html" },
