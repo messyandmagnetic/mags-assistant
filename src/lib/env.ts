@@ -27,6 +27,7 @@ const envSchema = z.object({
   TALLY_API_KEY: z.string().optional(),
   TALLY_WEBHOOK_SECRET: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  SCRAPER_PROVIDER: z.string().optional().default('actions'),
   NEXT_PUBLIC_SITE_URL: z.string().optional(),
   MM_DRIVE_ROOT_ID: z.string().optional(),
   CHAN_DRIVE_ROOT_ID: z.string().optional(),

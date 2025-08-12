@@ -13,6 +13,7 @@ Test links:
 - https://mags-assistant.vercel.app/chat — chat page
 - https://mags-assistant.vercel.app/studio — studio page
 - https://mags-assistant.vercel.app/planner — planner page
+- https://mags-assistant.vercel.app/check — system check panel
 
 Example curl for /start:
 
@@ -21,6 +22,11 @@ curl -X POST 'https://mags-assistant.vercel.app/api/rpa?action=start' \
   -H "Content-Type: application/json" \
   -d '{"url":"https://example.com"}'
 ```
+
+## Scraper
+
+Set `SCRAPER_PROVIDER` to choose a scraping backend (defaults to `actions`).
+If an external provider requires credentials, supply `SCRAPER_API_KEY` and `SCRAPER_ENDPOINT`.
 
 ## Chat UI
 
