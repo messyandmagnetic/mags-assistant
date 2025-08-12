@@ -38,7 +38,24 @@ MAKE_WEBHOOK_LAND=     <Make webhook: Land/Donor>
 # Modes
 AGGRESSIVE_GROWTH=     true|false   (default false; set true to scale 9–12+/day)
 FILL_EMPTY_SLOTS=      true|false   (default true)
+OFFLINE_MODE=          true|false   (skip external calls when true)
+ALLOW_TRENDING_SOUNDS= true|false   (default true)
+ALLOW_COMMERCIAL_SOUNDS=true|false  (default true)
+TIKTOK_APP_ID=         <app id>
+TIKTOK_APP_SECRET=     <app secret>
+TIKTOK_ACCESS_TOKEN=   <access token>
+TIKTOK_REFRESH_TOKEN=  <refresh token>
+TIKTOK_ACCESS_TOKEN_SECONDARY= <optional secondary token>
+TIKTOK_REFRESH_TOKEN_SECONDARY= <optional secondary refresh>
 ```
+
+## Connectivity Self-Test
+
+1. **Drive:** attempt to list RAW/WORK/FINAL/COVERS/BROLL folders. Record `DRIVE_STATUS = ok|offline|no_access` and note any missing folder.
+2. **Sheets:** open `SHEET_ID`, ensure tabs (Posts, Trends, Timeslots). On failure set `SHEETS_STATUS = offline|no_access`.
+3. **TikTok API:** when `SCHEDULER=tiktok_api`, call a lightweight verify endpoint. Capture `TIKTOK_STATUS = ok|error|offline` plus account type and scheduling capability.
+4. **CapCut:** if `CAPCUT_TEMPLATE_IDS` present, look up templates and set `CAPCUT_STATUS = ok|not_shared|offline`.
+5. Write results to a `STATUS_REPORT` tab and append a row to `Needs Attention` with `reason="connectivity_check"` when any status is not `ok`.
 
 ## Required Sheet Tabs & Headers
 
@@ -125,7 +142,10 @@ score = 0.35*niche_fit + 0.25*trend_velocity + 0.15*duration_alignment
    - Choose exact minute via Trends peak_windows ∩ Timeslots (or defaults):
    - Emotional 19:32–21:28 • Funny 12:02–13:58 • Light 08:34–10:26
    - Avoid same-category back-to-back within 2 slots; enforce series spacing ≥3 blocks.
-7. **Publish** → via SCHEDULER or TikTok API; set status=scheduled, capture tiktok_url.
+7. **Publish / Schedule** — Scheduler Router
+   - **IF `OFFLINE_MODE=true`:** write "Offline mode — skipping external calls." to `STATUS_REPORT`; for any clip at this step, set `status=ready` and stage caption, cover, audio choice, and schedule fields without API calls.
+   - **ELSE IF `SCHEDULER="tiktok_api"`:** ensure `TIKTOK_ACCESS_TOKEN` is present (refresh with `TIKTOK_REFRESH_TOKEN` when needed); resolve audio via `ALLOW_TRENDING_SOUNDS`/`ALLOW_COMMERCIAL_SOUNDS` and account type; `POST /video/upload` then `POST /video/publish` with caption, cover, `audio_id`, and scheduled timestamp in `POSTING_TIMEZONE`; on success set `status=scheduled` and save `tiktok_url`; retry twice before logging to Needs Attention.
+   - **ELSE:** fall back to Metricool/Loomly/Buffer branch.
 8. **Two-Account Comment Loops**
    - Primary: reply to first 20 comments in hour one; like all; start 2–3 Q threads; pin best.
    - Secondary: within 1–5 min post, leave 1–2 top-level comments; like/reply to 3+ others; reply to primary as another fan; stagger for 4h.

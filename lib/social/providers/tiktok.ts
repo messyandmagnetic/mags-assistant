@@ -1,7 +1,34 @@
-export async function post({ caption, mediaUrl, linkUrl }: { caption?: string; mediaUrl?: string; linkUrl?: string }) {
-  if (!process.env.TIKTOK_API_KEY) {
+export async function post({
+  caption,
+  mediaUrl,
+  linkUrl,
+  scheduleTime,
+}: {
+  caption?: string;
+  mediaUrl?: string;
+  linkUrl?: string;
+  scheduleTime?: number;
+}) {
+  if (process.env.OFFLINE_MODE === 'true') {
+    console.log('[tiktok] offline mode — skipping external calls');
+    return 'offline';
+  }
+  if (process.env.SCHEDULER === 'tiktok_api') {
+    if (!process.env.TIKTOK_ACCESS_TOKEN) {
+      console.log('[tiktok] TikTok token missing');
+      return 'token_missing';
+    }
+    console.log('[tiktok] schedule via API', {
+      caption,
+      mediaUrl,
+      scheduleTime,
+    });
+    // Real implementation would upload and schedule using TikTok Business API.
+    return 'scheduled';
+  }
+  if (!process.env.TIKTOK_ACCESS_TOKEN) {
     console.log('[tiktok] not configured');
-    return 'not configured';
+    return 'not_configured';
   }
   console.log('[tiktok] post', { caption, mediaUrl, linkUrl });
   return 'ok';
