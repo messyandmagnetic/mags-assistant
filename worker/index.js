@@ -1,5 +1,11 @@
 import { Client as NotionClient } from '@notionhq/client';
 import { sendEmail } from '../lib/gmail.ts';
+import {
+  ensureProfileDb,
+  getProfileMap,
+  getShareableProfile,
+  buildExportPacket,
+} from '../lib/profile.ts';
 
 export default {
   async fetch(request, env, ctx) {
@@ -199,14 +205,51 @@ export default {
       return json({ ok: true });
     }
 
+    if (pathname === '/profile/share' && method === 'GET') {
+      if (requirePass && pass !== env.FETCH_PASS)
+        return json({ ok: false, error: 'forbidden' }, 401);
+      const dbId = env.PROFILE_DB_ID || (await ensureProfileDb(env));
+      if (!dbId) return json({ ok: true, data: {}, count: 0 });
+      const data = await getShareableProfile({ ...env, PROFILE_DB_ID: dbId });
+      return json({ ok: true, data, count: Object.keys(data).length });
+    }
+
+    if (pathname === '/profile/export' && method === 'GET') {
+      if (requirePass && pass !== env.FETCH_PASS)
+        return json({ ok: false, error: 'forbidden' }, 401);
+      const includePII = url.searchParams.get('includePII') === 'true';
+      const dbId = env.PROFILE_DB_ID || (await ensureProfileDb(env));
+      const map = dbId
+        ? await getProfileMap({ ...env, PROFILE_DB_ID: dbId })
+        : {};
+      const exportMap = {};
+      for (const [k, v] of Object.entries(map)) {
+        if (v.visibility === 'shareable') exportMap[k] = v.value;
+      }
+      exportMap.founder_name = map.founder_name?.value || '';
+      exportMap.founder_email = map.founder_email?.value || '';
+      const packet = buildExportPacket(exportMap, { includePII });
+      return new Response(JSON.stringify(packet), {
+        status: 200,
+        headers: {
+          ...cors,
+          'Content-Type': 'application/json',
+          'Content-Disposition':
+            'attachment; filename="coyote_profile_export.json"',
+        },
+      });
+    }
+
     // check panel
     if (pathname === '/check' && method === 'GET') {
-      const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Maggie Check</title><style>body{font-family:sans-serif;padding:20px}button{margin:0.5rem}</style></head><body><h1>Maggie Check</h1><div><button id="ping">Ping Telegram</button><span id="pingRes"></span></div><div><button id="tally">Test Tally OK</button><span id="tallyRes"></span></div><div><button id="stripe">Test Stripe OK</button><span id="stripeRes"></span></div><div><button id="notion">Show Notion status</button><span id="notionRes"></span></div><p><a href="https://mags-assistant.vercel.app">Vercel Prod</a> | <a href="${env.WORKER_URL || ''}">Worker</a></p><script>
+      const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Maggie Check</title><style>body{font-family:sans-serif;padding:20px}button{margin:0.5rem}</style></head><body><h1>Maggie Check</h1><div><button id="ping">Ping Telegram</button><span id="pingRes"></span></div><div><button id="tally">Test Tally OK</button><span id="tallyRes"></span></div><div><button id="stripe">Test Stripe OK</button><span id="stripeRes"></span></div><div><button id="notion">Show Notion status</button><span id="notionRes"></span></div><div id="profileTile"><button id="share">Shareable Profile</button><span id="shareRes"></span><button id="exportBtn">Download Export JSON</button></div><p><a href="https://mags-assistant.vercel.app">Vercel Prod</a> | <a href="${env.WORKER_URL || ''}">Worker</a></p><script>
 async function call(id, method, url, body, headers){const btn=document.getElementById(id),res=document.getElementById(id+'Res');res.textContent='…';try{const r=await fetch(url,{method,headers:{'content-type':'application/json',...(headers||{})},body:body?JSON.stringify(body):undefined});const j=await r.json();res.textContent=j.ok?'ok':'fail'}catch(e){res.textContent='error'}}
 ping.onclick=()=>call('ping','POST','/api/telegram/send',{text:'ping'});
 tally.onclick=()=>call('tally','POST','/api/tally/webhook',{check:true},{'tally-webhook-secret':'${env.TALLY_WEBHOOK_SECRET ? 'set' : ''}'});
 stripe.onclick=()=>call('stripe','POST','/api/stripe/webhook',{});
 notion.onclick=()=>call('notion','GET','/diag');
+share.onclick=async()=>{const tile=document.getElementById('profileTile');tile.style.background='';shareRes.textContent='…';try{const r=await fetch('/profile/share');const j=await r.json();if(j.ok){shareRes.textContent=j.count;if(j.count>=5)tile.style.background='lightgreen';else if(j.count>0)tile.style.background='khaki';}else{shareRes.textContent='fail';tile.style.background='lightcoral';}}catch{shareRes.textContent='error';tile.style.background='lightcoral';}};
+exportBtn.onclick=()=>{window.open('/profile/export','_blank');};
 </script></body></html>`;
       return new Response(html, { headers: { 'content-type': 'text/html;charset=utf-8' } });
     }
