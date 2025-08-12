@@ -14,14 +14,18 @@
   <div><button id="tally">Test Tally OK</button> <span id="tallyRes"></span></div>
   <div><button id="stripe">Test Stripe OK</button> <span id="stripeRes"></span></div>
   <div><button id="notion">Show Notion status</button> <span id="notionRes"></span></div>
+  <div><button id="publish">Cron Publish Queue (dry-run)</button> <span id="publishRes"></span></div>
+  <div><button id="queueHead">List Queue Head</button> <span id="queueHeadRes"></span></div>
   <p><a href="https://mags-assistant.vercel.app">Vercel Prod</a></p>
 </div>
 <script>
-async function call(id, method, url, body, headers){const res=document.getElementById(id+'Res');res.textContent='…';try{const r=await fetch(url,{method,headers:{'content-type':'application/json',...(headers||{})},body:body?JSON.stringify(body):undefined});const j=await r.json();res.textContent=j.ok?'ok':'fail'}catch(e){res.textContent='error'}}
+async function call(id, method, url, body, headers){const res=document.getElementById(id+'Res');res.textContent='…';try{const baseHeaders={'content-type':'application/json',...(headers||{})};if(method==='POST'){baseHeaders['X-Fetch-Pass']=localStorage.getItem('fetch-pass')||'';}const r=await fetch(url,{method,headers:baseHeaders,body:body?JSON.stringify(body):undefined});const j=await r.json();res.textContent=j.ok?'ok':'fail'}catch(e){res.textContent='error'}}
 document.getElementById('ping').onclick=()=>call('ping','POST','/api/telegram/send',{text:'ping'});
 document.getElementById('tally').onclick=()=>call('tally','POST','/api/tally/webhook',{check:true});
 document.getElementById('stripe').onclick=()=>call('stripe','POST','/api/stripe/webhook',{});
 document.getElementById('notion').onclick=()=>call('notion','GET','/diag');
+document.getElementById('publish').onclick=()=>call('publish','POST','/api/cron/publish-queue?dry=1',{});
+document.getElementById('queueHead').onclick=()=>call('queueHead','GET','/api/queue/head');
 </script>
 </body>
 </html>

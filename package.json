@@ -5,7 +5,10 @@
   "scripts": {
     "build": "echo \"static + api\"",
     "start": "node server.js || echo \"Using Vercel serverless\"",
-    "test": "node --check api/router.js"
+    "test": "node --check api/router.js",
+    "trends": "tsx scripts/trends.ts",
+    "link-check": "tsx scripts/link_check.ts",
+    "memory:compact": "tsx scripts/memory/compact.ts"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
