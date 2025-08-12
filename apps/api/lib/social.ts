@@ -1,4 +1,5 @@
 import { getConfiguredProviders, getProvider } from "../../../lib/social/index.js";
+import { google } from "googleapis";
 
 export function tiktokEnabled() {
   return !!(
@@ -33,6 +34,30 @@ export async function crossPostClip(params: {
     }
   }
   return { ok: true, posted };
+}
+
+export async function generateDraftsFromDrive() {
+  const folderId = process.env.DRIVE_INBOX_FOLDER_ID;
+  if (!folderId) {
+    return { ok: false, msg: "missing_drive_folder" };
+  }
+  try {
+    const auth = new google.auth.GoogleAuth({
+      scopes: ["https://www.googleapis.com/auth/drive.readonly"],
+    });
+    const client = await auth.getClient();
+    const drive = google.drive({ version: "v3", auth: client });
+    const res = await drive.files.list({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: "files(id, name, mimeType, createdTime)",
+    });
+    const files = res.data.files || [];
+    // Placeholder: later create 1-3 drafts, captions, and send approvals
+    return { ok: true, items: files.length };
+  } catch (err) {
+    console.error("[social:drive]", err);
+    return { ok: false, msg: "drive_error" };
+  }
 }
 
 export async function collectSocialInbox() {
