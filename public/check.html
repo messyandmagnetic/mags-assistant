@@ -9,134 +9,58 @@
 <body>
   <div class="container">
     <h1>System Check</h1>
-    <ul id="probes"></ul>
-    <div id="controls">
-      <button id="btn-sync">Sync</button> <span id="sync-status"></span>
-      <button id="btn-audit">Audit</button> <span id="audit-status"></span>
-    </div>
-    <div id="profile-ctl">
-      <button id="btn-share">Shareable Profile</button> <span id="share-count"></span>
-      <button id="btn-export">Download Export JSON</button>
-    </div>
-    <p><a href="https://mags-assistant.vercel.app">Vercel Prod</a></p>
+    <div id="cards"></div>
+    <button id="btn-digest">Send test digest</button>
   </div>
-
 <script>
-  // --- CONFIG ---
-  const WORKER_BASE = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
-  const ENDPOINTS = [
-    { name: 'Vercel /api/health', url: '/api/health' },
-    { name: 'Vercel /api/stripe', url: '/api/stripe', method: 'POST' },
-    { name: 'Worker /health', url: `${WORKER_BASE}/health` },
-    { name: 'Worker /agent/sync/stripe-to-notion', url: `${WORKER_BASE}/agent/sync/stripe-to-notion`, method: 'POST' },
-    { name: 'Worker /agent/audit/prices', url: `${WORKER_BASE}/agent/audit/prices`, method: 'POST' },
-  ];
-
-  // Optional: set this in DevTools for gated calls
-  // window.FETCH_PASS = 'your-secret';
-
-  function color(el, ok, msg) {
-    el.textContent = msg;
-    el.style.color = ok ? 'green' : 'crimson';
-  }
-
-  async function safeJSON(res) {
-    const txt = await res.text();
-    try   { return { ok: true, data: JSON.parse(txt) }; }
-    catch { return { ok: true, data: { raw: txt } }; }
-  }
-
-  async function probeAll() {
-    const ul = document.getElementById('probes');
-    ul.innerHTML = '';
-    for (const ep of ENDPOINTS) {
-      const li = document.createElement('li');
-      li.textContent = `${ep.name}: probing…`;
-      ul.appendChild(li);
-      try {
-        const r = await fetch(ep.url, { method: ep.method || 'GET', headers: ep.method === 'POST' ? {'Content-Type':'application/json'} : undefined, body: ep.method === 'POST' ? '{}' : undefined });
-        let msg = 'ok';
-        try { const j = await r.json(); msg = j.msg || j.type || (j.ok ? 'ok' : 'fail'); } catch {}
-        li.textContent = `${ep.name}: ${r.ok ? msg : `HTTP ${r.status}`}`;
-        li.style.color = r.ok ? 'green' : 'crimson';
-      } catch (e) {
-        li.textContent = `${ep.name}: network error`;
-        li.style.color = 'crimson';
+const CARDS=[
+  {name:'API Health',url:'/api/diag/health'},
+  {name:'Notion',url:'/api/diag/notion'},
+  {name:'Stripe',url:'/api/diag/stripe'},
+  {name:'Gmail',url:'/api/diag/gmail'},
+  {name:'Telegram',url:'/api/diag/telegram'},
+  {name:'Drive',url:'/api/diag/drive'},
+  {name:'Cron',url:'/api/diag/cron'}
+];
+async function run(){
+  const host=document.getElementById('cards');
+  for(const c of CARDS){
+    const div=document.createElement('div');
+    div.className='card';
+    div.textContent=c.name+': checking...';
+    host.appendChild(div);
+    try{
+      const r=await fetch(c.url);
+      const j=await r.json();
+      if(j.ok){
+        div.classList.add('ok');
+        div.textContent=c.name;
+      }else{
+        div.classList.add('fail');
+        div.textContent=c.name+': '+(j.reason||'error');
+        if(j.next_steps&&j.next_steps[0]){
+          const ns=document.createElement('div');
+          ns.className='next';
+          ns.textContent=j.next_steps[0];
+          div.appendChild(ns);
+        }
       }
+    }catch(e){
+      div.classList.add('fail');
+      div.textContent=c.name+': network error';
     }
   }
-
-  async function postJSON(url) {
-    const headers = { 'Content-Type': 'application/json' };
-    if (window.FETCH_PASS) headers['X-Fetch-Pass'] = window.FETCH_PASS;
-
-    const res = await fetch(url, { method: 'POST', headers, body: '{}' });
-    const body = await safeJSON(res);
-    return { ok: res.ok, data: body.data };
-  }
-
-  // Button wiring
-  document.getElementById('btn-sync').addEventListener('click', async () => {
-    const el = document.getElementById('sync-status');
-    color(el, true, 'syncing…');
-    try {
-      const { ok, data } = await postJSON(`${WORKER_BASE}/agent/sync/stripe-to-notion`);
-      color(el, ok, ok ? (data.msg || 'synced') : `sync failed`);
-      if (!ok) console.warn('sync error', data);
-    } catch (e) {
-      color(el, false, 'sync network error');
-    }
-  });
-
-  document.getElementById('btn-audit').addEventListener('click', async () => {
-    const el = document.getElementById('audit-status');
-    color(el, true, 'auditing…');
-    try {
-      const { ok, data } = await postJSON(`${WORKER_BASE}/agent/audit/prices`);
-      color(el, ok, ok ? (data.msg || 'audited') : `audit failed`);
-      if (!ok) console.warn('audit error', data);
-    } catch (e) {
-      color(el, false, 'audit network error');
-    }
-  });
-
-  document.getElementById('btn-share').addEventListener('click', async () => {
-    const tile = document.getElementById('profile-ctl');
-    const el = document.getElementById('share-count');
-    el.textContent = '…';
-    tile.style.backgroundColor = '';
-    try {
-      const headers = {};
-      if (window.FETCH_PASS) headers['X-Fetch-Pass'] = window.FETCH_PASS;
-      const r = await fetch(`${WORKER_BASE}/profile/share`, { headers });
-      const j = await r.json();
-      if (j.ok) {
-        el.textContent = j.count;
-        if (j.count >= 5) tile.style.backgroundColor = 'lightgreen';
-        else if (j.count > 0) tile.style.backgroundColor = 'khaki';
-      } else {
-        el.textContent = 'err';
-        tile.style.backgroundColor = 'lightcoral';
-      }
-    } catch (e) {
-      el.textContent = 'err';
-      tile.style.backgroundColor = 'lightcoral';
-    }
-  });
-
-  document.getElementById('btn-export').addEventListener('click', () => {
-    window.open(`${WORKER_BASE}/profile/export`, '_blank');
-  });
-
-  // Kick off probe on load
-  probeAll();
+}
+run();
+document.getElementById('btn-digest').addEventListener('click',()=>{
+  fetch('/api/cron/digest?test=true', {method:'POST'});
+});
 </script>
-
 <style>
-  #probes { line-height: 1.6; }
-  #controls { margin-top: 1rem; }
-  #profile-ctl { margin-top: 1rem; }
-  button { margin-right: .5rem }
+  .card{padding:10px;margin:6px;border:1px solid #ccc;}
+  .card.ok{background:#c7f5d9;}
+  .card.fail{background:#f5c7c7;}
+  .next{font-size:0.9em;margin-top:4px;}
 </style>
 </body>
 </html>
