@@ -9,6 +9,7 @@ import { socialCollectInbox } from "./social-inbox";
 import { socialRefreshAnalytics } from "./social-analytics";
 import { stripeAudit } from "./stripe-audit";
 import { outreachRun } from "./outreach";
+import { socialGenerateDrafts } from "./social-drafts";
 
 export type TaskResult = { name: string; ok: boolean; msg?: string };
 export type TaskFn = () => Promise<TaskResult>;
@@ -22,6 +23,7 @@ export const tasks: Record<string, TaskFn> = {
   "social.post_due": socialPostDue,
   "social.collect_inbox": socialCollectInbox,
   "social.refresh_analytics": socialRefreshAnalytics,
+  "social.generate_drafts": socialGenerateDrafts,
   "stripe.audit": stripeAudit,
   "outreach.run": outreachRun,
 };
@@ -35,6 +37,7 @@ const taskFlags: Record<string, string> = {
   "social.post_due": "TASK_SOCIAL_POST_DUE",
   "social.collect_inbox": "TASK_SOCIAL_INBOX",
   "social.refresh_analytics": "TASK_SOCIAL_ANALYTICS",
+  "social.generate_drafts": "TASK_SOCIAL_GENERATE_DRAFTS",
   "stripe.audit": "TASK_STRIPE_AUDIT",
   "outreach.run": "TASK_OUTREACH_RUN",
 };

@@ -213,3 +213,18 @@ curl -X POST "$API_BASE/api/notion/backfill-defaults" \
 ## Content planner
 
 _(coming soon)_
+
+## Social drafts & trending sounds
+
+Early support for generating short-form video drafts from a Google Drive inbox and scheduling with trending audio.
+
+### Required environment variables
+
+- `DRIVE_INBOX_FOLDER_ID` – Google Drive folder containing new media.
+- `NOTION_CONTENT_DB_ID` – Notion database for the content queue.
+- `OPENAI_API_KEY` – used for transcriptions and caption suggestions.
+- `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` – send approval previews.
+- `BROWSERLESS_KEY` – headless browser for TikTok/Instagram scheduling.
+- `YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` – YouTube uploads.
+- `TIKTOK_SESSION_COOKIE` – TikTok session with access to trending sounds.
+- `IG_SESSION_COOKIE` – Instagram session for selecting trending audio.
