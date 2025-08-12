@@ -31,6 +31,7 @@ import { createSpreadsheet, addSheet, appendRows, getDrive } from '../lib/google
 import crypto from 'crypto';
 import { log as logEntry } from '../lib/logger.js';
 import { enqueueNewVideos, handleApprove, handleDecline, autoApproveOld } from '../lib/drive-watcher.js';
+import { syncStripeProducts, runPriceAudit } from '../lib/stripe-products.js';
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -185,6 +186,17 @@ export default async function handler(req, res) {
       return ok(res, { discovered });
     }
 
+    if (pathname === '/api/cron/stripe-daily' && method === 'POST') {
+      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
+      const sync = await syncStripeProducts();
+      const audit = await runPriceAudit();
+      await notify(
+        'Maggie daily',
+        `synced ${sync.upserts} items; audited ${audit.audited} (suggested ${audit.changed}) \u2705`
+      );
+      return ok(res, { sync, audit });
+    }
+
     if (pathname === '/api/approve' && (method === 'POST' || method === 'GET')) {
       const { searchParams } = new URL(url, `http://${req.headers.host}`);
       const body = req.body || {};
@@ -233,6 +245,12 @@ export default async function handler(req, res) {
           db: !!env.NOTION_DATABASE_ID,
           inbox: !!env.NOTION_INBOX_PAGE_ID,
           hq: !!env.NOTION_HQ_PAGE_ID,
+          defaultMarkup: env.DEFAULT_MARKUP_PERCENT !== undefined,
+          defaultRounding: env.DEFAULT_ROUNDING !== undefined,
+          defaultCurrency: env.DEFAULT_CURRENCY !== undefined,
+          priceAuditMin: env.PRICE_AUDIT_MIN !== undefined,
+          priceAuditMax: env.PRICE_AUDIT_MAX !== undefined,
+          priceRulesDb: !!env.NOTION_PRICE_RULES_DB_ID,
         },
       });
     }
@@ -682,6 +700,32 @@ Output:
       const page = await notion.pages.retrieve({ page_id: id });
       const result = page.properties?.Result?.rich_text?.map(r => r.plain_text).join('\n') || '';
       return ok(res, { result });
+    }
+
+    if (pathname === '/api/stripe/sync-products' && method === 'POST') {
+      try {
+        const r = await syncStripeProducts();
+        await notify(
+          'Stripe→Notion sync',
+          `products ${r.products}, prices ${r.prices}, upserts ${r.upserts}`
+        );
+        return ok(res, r);
+      } catch (e) {
+        return bad(res, e?.message || 'sync failed', 500);
+      }
+    }
+
+    if (pathname === '/api/stripe/price-audit' && method === 'POST') {
+      try {
+        const r = await runPriceAudit();
+        await notify(
+          'Stripe price audit',
+          `audited ${r.audited}; changed ${r.changed}`
+        );
+        return ok(res, r);
+      } catch (e) {
+        return bad(res, e?.message || 'audit failed', 500);
+      }
     }
 
     // ===== Stripe sync stub =====
