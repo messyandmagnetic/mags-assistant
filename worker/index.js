@@ -1,3 +1,6 @@
+import { Client as NotionClient } from '@notionhq/client';
+import { sendEmail } from '../lib/gmail.ts';
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -6,7 +9,7 @@ export default {
 
     // --- CORS ---
     const cors = {
-      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Origin': 'https://mags-assistant.vercel.app',
       'Access-Control-Allow-Headers': 'Content-Type, X-Fetch-Pass',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
     };
@@ -129,6 +132,70 @@ export default {
       return json({ ok: true, task: null });
     }
     if (pathname === '/api/queue/ack' && method === 'POST') {
+      return json({ ok: true });
+    }
+
+    const templates = {
+      financing: `Hello [Name],\nThank you for your willingness to help us secure the Coyote Commons property. We’re pursuing a short-term bridge while philanthropic funds clear. I’m most comfortable handling details by email—could you share the ballpark terms you’d consider (amount, term, interest, collateral)? I’ll reply quickly with any materials you need.\nWarmly,\n[Your Name]`,
+      'donor/grant': `Hi [Name],\nThank you for your interest in Coyote Commons—a regenerative land + community hub. Our donation link is ready for immediate gifts that secure the land. I prefer email, so if you have questions, feel free to reply here and I’ll send the one-page brief and receipt details.\nWith gratitude,\n[Your Name]`,
+      'realtor/seller': `Hi [Name],\nWe’re advancing financing on parallel tracks (bridge + philanthropic) and moving quickly. I prefer email—could you share any timeline updates or active offers so we can align our written offer?\nBest,\n[Your Name]`,
+      'general-info': `Hi [Name],\nHappy to continue via email and provide any details you need about Coyote Commons. Phone if necessary.\nBest,\n[Your Name]`
+    };
+
+    if (pathname === '/land/summary' && method === 'POST') {
+      const body = await request.json();
+      const threads = body?.threads || [];
+      let sent = 0;
+      const notion = env.NOTION_TOKEN && env.OUTREACH_DB_ID ? new NotionClient({ auth: env.NOTION_TOKEN }) : null;
+      const shouldSend = env.SEND_AUTOREPLY === true || env.SEND_AUTOREPLY === 'true';
+      for (const t of threads) {
+        const tpl = templates[t.intent];
+        if (!tpl || !shouldSend || !t.email) continue;
+        const text = tpl.replace('[Name]', t.name || 'there').replace('[Your Name]', env.OUTREACH_NAME || 'Maggie');
+        try {
+          await sendEmail({ to: t.email, subject: t.subject || 'Re: Coyote Commons', text });
+          sent++;
+          if (notion && t.id) {
+            await notion.pages.update({
+              page_id: t.id,
+              properties: {
+                Status: { select: { name: 'Replied' } },
+                Summary: {
+                  rich_text: [
+                    {
+                      text: { content: `Auto-reply sent @ ${new Date().toISOString().slice(0, 10)}` },
+                    },
+                  ],
+                },
+              },
+            });
+          }
+        } catch (e) {
+          console.warn('sendEmail failed', e);
+        }
+      }
+      return json({ ok: true, sent });
+    }
+
+    if (pathname === '/land/mark' && method === 'POST') {
+      const { id, threadUrl, status } = await request.json();
+      if (!env.NOTION_TOKEN || !env.OUTREACH_DB_ID) {
+        return json({ ok: false, error: 'missing env' }, 500);
+      }
+      const notion = new NotionClient({ auth: env.NOTION_TOKEN });
+      let pageId = id;
+      if (!pageId && threadUrl) {
+        const res = await notion.databases.query({
+          database_id: env.OUTREACH_DB_ID,
+          filter: { property: 'Thread URL', url: { equals: threadUrl } },
+        });
+        pageId = res.results[0]?.id;
+      }
+      if (!pageId) return json({ ok: false, error: 'not found' }, 404);
+      await notion.pages.update({
+        page_id: pageId,
+        properties: { Status: { select: { name: status } } },
+      });
       return json({ ok: true });
     }
 
