@@ -11,7 +11,7 @@ other business operations.
   - `social.collect_inbox` would aggregate comments and DMs.
   - `social.refresh_analytics` polls analytics and updates "best times to post".
 - Required environment variables (one per platform):
-  - `TIKTOK_API_KEY`, `INSTAGRAM_API_KEY`, `YOUTUBE_API_KEY`,
+  - `TIKTOK_ACCESS_TOKEN`, `INSTAGRAM_API_KEY`, `YOUTUBE_API_KEY`,
     `PINTEREST_API_KEY`, `TWITTER_API_KEY`, `LINKEDIN_API_KEY`.
 
 ## Stripe products

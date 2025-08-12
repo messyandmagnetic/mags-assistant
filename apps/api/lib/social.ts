@@ -4,8 +4,8 @@ import { google } from "googleapis";
 export function tiktokEnabled() {
   return !!(
     process.env.TIKTOK_ACCESS_TOKEN &&
-    process.env.TIKTOK_CLIENT_KEY &&
-    process.env.TIKTOK_CLIENT_SECRET
+    (process.env.TIKTOK_APP_ID || process.env.TIKTOK_CLIENT_KEY) &&
+    (process.env.TIKTOK_APP_SECRET || process.env.TIKTOK_CLIENT_SECRET)
   );
 }
 

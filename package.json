@@ -9,7 +9,8 @@
     "trends": "tsx scripts/trends.ts",
     "link-check": "tsx scripts/link_check.ts",
     "memory:compact": "tsx scripts/memory/compact.ts",
-    "social:health": "tsx scripts/social_health.ts"
+    "social:health": "tsx scripts/social_health.ts",
+    "social:self-test": "tsx scripts/connectivity_self_test.ts"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
