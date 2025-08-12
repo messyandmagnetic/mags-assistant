@@ -60,7 +60,10 @@ class GoogleDriveStorage implements StorageAdapter {
 }
 
 export function getStorage(): StorageAdapter {
-  if (process.env.GOOGLE_CLIENT_EMAIL && process.env.GOOGLE_PRIVATE_KEY) {
+  if (
+    process.env.GOOGLE_CLIENT_EMAIL &&
+    (process.env.GOOGLE_PRIVATE_KEY || process.env.GOOGLE_KEY_URL)
+  ) {
     return new GoogleDriveStorage();
   }
   return new LocalStorage();

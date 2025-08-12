@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
     if (!fileId) {
       return NextResponse.json({ ok: false, error: 'fileId required' }, { status: 400 });
     }
-    const drive = getDrive();
+    const drive = await getDrive();
     const date = new Date().toISOString().slice(0, 10);
     const parent = '1ebD1-EvQgOIV5ip9w9eSejBtYjpRPBd6';
     // ensure /Inbox folder

@@ -28,7 +28,7 @@ export async function GET() {
 
 export async function POST(req: NextRequest) {
   try {
-    const drive = getDrive();
+    const drive = await getDrive();
     const channelId = randomUUID();
     const domain = process.env.PROD_DOMAIN || req.headers.get('host') || '';
     const address = `https://${domain}/api/drive/notify`;

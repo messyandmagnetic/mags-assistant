@@ -15,6 +15,6 @@
 - Without these, posts fall back to manual Telegram approval.
 
 ## Failure modes
-- Missing Google service account credentials: set `GOOGLE_CLIENT_EMAIL` and `GOOGLE_PRIVATE_KEY`.
+- Missing Google service account credentials: set `GOOGLE_CLIENT_EMAIL`, `FETCH_PASS`, and `GOOGLE_KEY_URL`.
 - Missing Buffer credentials: add the env vars above via Vercel dashboard.
 - Check runtime logs in Vercel or GitHub Actions for errors.
