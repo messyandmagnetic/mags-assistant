@@ -108,24 +108,7 @@ export default async function handler(req, res) {
     // health / diag
     if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
     if (pathname === '/api/health' && method === 'GET') {
-      const base = env.GOOGLE_KEY_URL ? env.GOOGLE_KEY_URL.replace(/\/mags-key$/, '') : '';
-      const out = { ok: true };
-      try {
-        const r1 = await fetch(`${base}/health`);
-        out.worker = r1.ok ? 'ok' : `status ${r1.status}`;
-      } catch {
-        out.worker = 'error';
-      }
-      try {
-        const r2 = await fetch(env.GOOGLE_KEY_URL || '', {
-          headers: { Authorization: `Bearer ${env.FETCH_PASS || ''}` },
-        });
-        const txt = await r2.text();
-        out.key = r2.ok && txt.trim() ? 'ok' : `status ${r2.status}`;
-      } catch {
-        out.key = 'error';
-      }
-      return res.status(200).json(out);
+      return res.status(200).json({ ok: true, vercel: 'online' });
     }
 
     if (pathname === '/api/diag/notion' && method === 'GET') {
@@ -268,37 +251,41 @@ export default async function handler(req, res) {
 
     // ===== Tally webhook =====
     if ((pathname === '/api/tally' || pathname === '/api/tally/webhook') && method === 'POST') {
-      const secret = env.TALLY_WEBHOOK_SECRET;
-      const auth = req.headers['authorization'];
-      const sig = req.headers['tally-signature'] || req.headers['x-tally-signature'];
-      if (secret) {
-        let okSig = false;
-        if (auth && auth === `Bearer ${secret}`) {
-          okSig = true;
-        } else if (sig) {
-          const h = crypto
-            .createHmac('sha256', secret)
-            .update(req.rawBody || '')
-            .digest('hex');
-          okSig = sig === h;
-        }
-        if (!okSig) return bad(res, 'Unauthorized', 401);
+      const sig = req.headers['tally-webhook-secret'] || req.headers['tally-webhook-secret'];
+      if (env.TALLY_WEBHOOK_SECRET && sig !== env.TALLY_WEBHOOK_SECRET) {
+        return bad(res, 'Unauthorized', 401);
       }
       const body = typeof req.body === 'object' ? req.body : await readJson(req);
-      await logEntry('tally', 'webhook', { formId: body?.formId || body?.event?.formId });
-      const sheet = await getMasterSheet();
-      if (!sheet) return bad(res, 'Master sheet missing', 500);
-      const title = body?.event?.formName || body?.formName;
-      let tab = null;
-      if (title === 'Soul Blueprint Quiz') tab = 'Orders/Intake';
-      if (title === 'Client Feedback') tab = 'Feedback';
-      if (tab) {
-        try {
-          await addSheet(sheet.id, tab, ['Timestamp', 'Data']);
-        } catch {}
-        await appendRows(sheet.id, `${tab}!A:B`, [[new Date().toISOString(), JSON.stringify(body)]]);
+      try {
+        await fetch(`${env.API_BASE}/agent/tally/ingest`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(env.FETCH_PASS ? { 'X-Fetch-Pass': env.FETCH_PASS } : {}),
+          },
+          body: JSON.stringify(body),
+        });
+      } catch (err) {
+        return bad(res, 'worker error', 500);
       }
       return ok(res, { received: true });
+    }
+
+    if (pathname === '/api/stripe' && method === 'POST') {
+      const sig = req.headers['stripe-signature'];
+      const raw = req.rawBody || JSON.stringify(req.body || {});
+      try {
+        if (env.STRIPE_WEBHOOK_SECRET) {
+          const stripe = getStripe();
+          const event = stripe.webhooks.constructEvent(raw, sig, env.STRIPE_WEBHOOK_SECRET);
+          return ok(res, { type: event.type });
+        }
+      } catch (err) {
+        return bad(res, 'Invalid signature', 400);
+      }
+      let evt = {};
+      try { evt = JSON.parse(raw); } catch {}
+      return ok(res, { type: evt['type'] });
     }
 
     // ===== Stripe webhook =====

@@ -21,9 +21,11 @@
   // --- CONFIG ---
   const WORKER_BASE = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
   const ENDPOINTS = [
+    { name: 'Vercel /api/health', url: '/api/health' },
+    { name: 'Vercel /api/stripe', url: '/api/stripe', method: 'POST' },
     { name: 'Worker /health', url: `${WORKER_BASE}/health` },
-    { name: 'Worker /api/stripe/sync',  url: `${WORKER_BASE}/api/stripe/sync` },
-    { name: 'Worker /api/stripe/audit', url: `${WORKER_BASE}/api/stripe/audit` },
+    { name: 'Worker /agent/sync/stripe-to-notion', url: `${WORKER_BASE}/agent/sync/stripe-to-notion`, method: 'POST' },
+    { name: 'Worker /agent/audit/prices', url: `${WORKER_BASE}/agent/audit/prices`, method: 'POST' },
   ];
 
   // Optional: set this in DevTools for gated calls
@@ -48,8 +50,10 @@
       li.textContent = `${ep.name}: probing…`;
       ul.appendChild(li);
       try {
-        const r = await fetch(ep.url, { method: 'GET' });
-        li.textContent = `${ep.name}: ${r.ok ? 'ok' : `HTTP ${r.status}`}`;
+        const r = await fetch(ep.url, { method: ep.method || 'GET', headers: ep.method === 'POST' ? {'Content-Type':'application/json'} : undefined, body: ep.method === 'POST' ? '{}' : undefined });
+        let msg = 'ok';
+        try { const j = await r.json(); msg = j.msg || j.type || (j.ok ? 'ok' : 'fail'); } catch {}
+        li.textContent = `${ep.name}: ${r.ok ? msg : `HTTP ${r.status}`}`;
         li.style.color = r.ok ? 'green' : 'crimson';
       } catch (e) {
         li.textContent = `${ep.name}: network error`;
@@ -72,8 +76,8 @@
     const el = document.getElementById('sync-status');
     color(el, true, 'syncing…');
     try {
-      const { ok, data } = await postJSON(`${WORKER_BASE}/api/stripe/sync`);
-      color(el, ok, ok ? 'synced' : `sync failed`);
+      const { ok, data } = await postJSON(`${WORKER_BASE}/agent/sync/stripe-to-notion`);
+      color(el, ok, ok ? (data.msg || 'synced') : `sync failed`);
       if (!ok) console.warn('sync error', data);
     } catch (e) {
       color(el, false, 'sync network error');
@@ -84,8 +88,8 @@
     const el = document.getElementById('audit-status');
     color(el, true, 'auditing…');
     try {
-      const { ok, data } = await postJSON(`${WORKER_BASE}/api/stripe/audit`);
-      color(el, ok, ok ? 'audited' : `audit failed`);
+      const { ok, data } = await postJSON(`${WORKER_BASE}/agent/audit/prices`);
+      color(el, ok, ok ? (data.msg || 'audited') : `audit failed`);
       if (!ok) console.warn('audit error', data);
     } catch (e) {
       color(el, false, 'audit network error');
