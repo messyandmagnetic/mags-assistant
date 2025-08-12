@@ -3,43 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mags Check</title>
+  <title>Maggie Check</title>
   <link rel="stylesheet" href="/brand.css">
+  <style>body{font-family:sans-serif;padding:20px}button{margin:0.5rem}</style>
 </head>
 <body>
 <div class="container">
   <h1>System Check</h1>
-  <ul id="results"></ul>
+  <div><button id="ping">Ping Telegram</button> <span id="pingRes"></span></div>
+  <div><button id="tally">Test Tally OK</button> <span id="tallyRes"></span></div>
+  <div><button id="stripe">Test Stripe OK</button> <span id="stripeRes"></span></div>
+  <div><button id="notion">Show Notion status</button> <span id="notionRes"></span></div>
+  <p><a href="https://mags-assistant.vercel.app">Vercel Prod</a></p>
 </div>
 <script>
-const endpoints = [
-  { name: 'api health', url: '/api/health' },
-  { name: 'diag notion', url: '/api/diag/notion' },
-  { name: 'diag stripe', url: '/api/diag/stripe' },
-  { name: 'diag telegram', url: '/api/diag/telegram' },
-  { name: 'diag tally', url: '/api/diag/tally' },
-];
-const params = new URLSearchParams(location.search);
-const worker = params.get('worker');
-if (worker) {
-  endpoints.push({ name: 'worker health', url: worker.replace(/\/$/, '') + '/health' });
-}
-const ul = document.getElementById('results');
-endpoints.forEach(ep => {
-  const li = document.createElement('li');
-  li.textContent = ep.name + ': …';
-  ul.appendChild(li);
-  fetch(ep.url)
-    .then(r => r.json())
-    .then(data => {
-      const ok = data && data.ok !== false;
-      li.textContent = ep.name + ': ' + (ok ? 'PASS' : `FAIL (${data.reason || 'unknown'})`);
-    })
-    .catch(() => {
-      li.textContent = ep.name + ': FAIL (network)';
-    });
-});
+async function call(id, method, url, body, headers){const res=document.getElementById(id+'Res');res.textContent='…';try{const r=await fetch(url,{method,headers:{'content-type':'application/json',...(headers||{})},body:body?JSON.stringify(body):undefined});const j=await r.json();res.textContent=j.ok?'ok':'fail'}catch(e){res.textContent='error'}}
+document.getElementById('ping').onclick=()=>call('ping','POST','/api/telegram/send',{text:'ping'});
+document.getElementById('tally').onclick=()=>call('tally','POST','/api/tally/webhook',{check:true});
+document.getElementById('stripe').onclick=()=>call('stripe','POST','/api/stripe/webhook',{});
+document.getElementById('notion').onclick=()=>call('notion','GET','/diag');
 </script>
 </body>
 </html>
-
