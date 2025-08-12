@@ -16,6 +16,7 @@ async function readBody(req) {
       data += chunk;
     });
     req.on('end', () => {
+      req.rawBody = data;
       try {
         resolve(data ? JSON.parse(data) : {});
       } catch (_) {
