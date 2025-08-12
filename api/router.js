@@ -30,6 +30,7 @@ import { ensureStripeSchema, backfillDefaults } from '../lib/notion-stripe.js';
 import { createSpreadsheet, addSheet, appendRows, getDrive } from '../lib/google.js';
 import crypto from 'crypto';
 import { log as logEntry } from '../lib/logger.js';
+import { enqueueNewVideos, handleApprove, handleDecline, autoApproveOld } from '../lib/drive-watcher.js';
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -62,7 +63,12 @@ function checkWorker(req) {
 }
 
 function checkCron(req) {
-  const k = req.headers['x-mags-key'] || new URL(req.url, 'http://x').searchParams.get('key');
+  const url = new URL(req.url, 'http://x');
+  const k =
+    req.headers['x-mags-key'] ||
+    url.searchParams.get('key') ||
+    url.searchParams.get('token');
+  if (req.headers['x-vercel-cron']) return true;
   return k && env.CRON_SECRET && k === env.CRON_SECRET;
 }
 
@@ -107,6 +113,39 @@ export default async function handler(req, res) {
         gitSha: process.env.GIT_SHA || 'dev',
         uptime: process.uptime(),
       });
+    }
+
+    if (pathname === '/api/drive/review' && (method === 'GET' || method === 'POST')) {
+      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
+      const discovered = await enqueueNewVideos();
+      await autoApproveOld();
+      return ok(res, { discovered });
+    }
+
+    if (pathname === '/api/approve' && (method === 'POST' || method === 'GET')) {
+      const { searchParams } = new URL(url, `http://${req.headers.host}`);
+      const body = req.body || {};
+      const fileId = body.fileId || searchParams.get('fileId');
+      const token = body.token || searchParams.get('token');
+      try {
+        await handleApprove(fileId, token);
+        return ok(res, { approved: fileId });
+      } catch (err) {
+        return bad(res, err.message || 'error', 400);
+      }
+    }
+
+    if (pathname === '/api/decline' && (method === 'POST' || method === 'GET')) {
+      const { searchParams } = new URL(url, `http://${req.headers.host}`);
+      const body = req.body || {};
+      const fileId = body.fileId || searchParams.get('fileId');
+      const token = body.token || searchParams.get('token');
+      try {
+        await handleDecline(fileId, token);
+        return ok(res, { declined: fileId });
+      } catch (err) {
+        return bad(res, err.message || 'error', 400);
+      }
     }
     if (pathname === '/api/rpa/health') {
       if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
