@@ -1,0 +1,30 @@
+name: Run Social Scheduler
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  call-scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit production scheduler
+        env:
+          TOKEN: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${TOKEN:-}" ]; then
+            echo "CRON_SECRET is not set in repo secrets"; exit 1
+          fi
+          URL="https://mags-assistant.vercel.app/api/social/run-scheduler?token=${TOKEN}"
+          echo "Calling: $URL"
+          curl -fsS "$URL" -m 60
+          echo "OK"
+
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health
+        run: |
+          curl -fsS "https://mags-assistant.vercel.app/api/health" -m 15 | jq .
