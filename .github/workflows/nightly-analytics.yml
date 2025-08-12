@@ -1,0 +1,9 @@
+name: Nightly analytics
+on:
+  schedule: [{ cron: "15 7 * * *" }]
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Hit analyze endpoint
+        run: curl -fsS "${{ secrets.PROD_URL }}/api/social/analyze?token=${{ secrets.CRON_SECRET }}"

@@ -1,0 +1,14 @@
+name: Posting windows
+on:
+  schedule:
+    - cron: "00 15 * * *"
+    - cron: "00 18 * * *"
+    - cron: "00 21 * * *"
+    - cron: "00 01 * * *"
+    - cron: "00 04 * * *"
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scheduler
+        run: curl -fsS "${{ secrets.PROD_URL }}/api/social/run-scheduler?token=${{ secrets.CRON_SECRET }}"
