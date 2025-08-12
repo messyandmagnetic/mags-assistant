@@ -8,7 +8,8 @@
     "test": "node --check api/router.js",
     "trends": "tsx scripts/trends.ts",
     "link-check": "tsx scripts/link_check.ts",
-    "memory:compact": "tsx scripts/memory/compact.ts"
+    "memory:compact": "tsx scripts/memory/compact.ts",
+    "social:health": "tsx scripts/social_health.ts"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
