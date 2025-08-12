@@ -23,6 +23,14 @@ const envSchema = z.object({
   BRAND_SECONDARY_HEX: z.string().regex(/^#?[0-9A-Fa-f]{6}$/).optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),
   TELEGRAM_CHAT_ID: z.string().optional(),
+  TALLY_API_KEY: z.string().optional(),
+  TALLY_WEBHOOK_SECRET: z.string().optional(),
+  STRIPE_WEBHOOK_SECRET: z.string().optional(),
+  NEXT_PUBLIC_SITE_URL: z.string().optional(),
+  MM_DRIVE_ROOT_ID: z.string().optional(),
+  CHAN_DRIVE_ROOT_ID: z.string().optional(),
+  SALES_TAX_STATE: z.string().optional(),
+  SALES_TAX_ZIP: z.string().optional(),
   APPROVAL_MODE: z.enum(['strict', 'normal', 'auto']).optional().default('normal'),
 });
 

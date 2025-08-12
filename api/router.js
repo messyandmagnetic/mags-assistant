@@ -27,6 +27,8 @@ import { getStripe } from '../lib/clients/stripe.js';
 import { getStorage } from '../lib/storage.ts';
 import { spawnSync } from 'child_process';
 import { ensureStripeSchema, backfillDefaults } from '../lib/notion-stripe.js';
+import { createSpreadsheet, addSheet, appendRows, getDrive } from '../lib/google.js';
+import crypto from 'crypto';
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -83,6 +85,13 @@ async function notify(subject, message) {
   } catch {}
 }
 
+async function getMasterSheet() {
+  const drive = getDrive();
+  const q = `name='Master Memory — Messy & Magnetic' and mimeType='application/vnd.google-apps.spreadsheet' and '${env.MM_DRIVE_ROOT_ID}' in parents`;
+  const r = await drive.files.list({ q, fields: 'files(id, webViewLink)' });
+  return r.data.files && r.data.files[0] ? r.data.files[0] : null;
+}
+
 export default async function handler(req, res) {
   const { method, url } = req;
   console.log(`${method} ${url}`);
@@ -116,6 +125,96 @@ export default async function handler(req, res) {
           hq: !!env.NOTION_HQ_PAGE_ID,
         },
       });
+    }
+
+    // ===== Bootstrap: create Master Memory sheet =====
+    if (pathname === '/api/bootstrap' && method === 'POST') {
+      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
+      const title = 'Master Memory — Messy & Magnetic';
+      const existing = await getMasterSheet();
+      if (existing) return ok(res, existing);
+      const { id, webViewLink } = await createSpreadsheet(title, env.MM_DRIVE_ROOT_ID);
+      const tabs = [
+        'Personal Bio & Preferences',
+        'Business & Brand',
+        'Retreat & Land Vision',
+        'Social Strategy',
+        'Automation & Tools',
+        'Key Ongoing Goals',
+        'To Remove / Outdated',
+        'Backups_Index',
+      ];
+      for (const t of tabs) {
+        const headers = t === 'Backups_Index' ? [] : ['Category', 'Detail', 'Last Updated'];
+        await addSheet(id, t, headers);
+      }
+      const seeds = [
+        ['Tone', 'Messy & Magnetic', new Date().toISOString()],
+        ['Style', 'Authentic & Casual', new Date().toISOString()],
+      ];
+      await appendRows(id, `${tabs[0]}!A2:C`, seeds);
+      return ok(res, { id, url: webViewLink });
+    }
+
+    // ===== Tally webhook =====
+    if (pathname === '/api/tally/webhook' && method === 'POST') {
+      const secret = env.TALLY_WEBHOOK_SECRET;
+      const sig = req.headers['x-tally-signature'] || req.headers['tally-signature'];
+      if (secret && sig !== secret) return bad(res, 'Unauthorized', 401);
+      const body = typeof req.body === 'object' ? req.body : await readJson(req);
+      const sheet = await getMasterSheet();
+      if (!sheet) return bad(res, 'Master sheet missing', 500);
+      const title = body?.event?.formName || body?.formName;
+      let tab = null;
+      if (title === 'Soul Blueprint Quiz') tab = 'Orders/Intake';
+      if (title === 'Client Feedback') tab = 'Feedback';
+      if (tab) {
+        try {
+          await addSheet(sheet.id, tab, ['Timestamp', 'Data']);
+        } catch {}
+        await appendRows(sheet.id, `${tab}!A:B`, [[new Date().toISOString(), JSON.stringify(body)]]);
+      }
+      return ok(res, { received: true });
+    }
+
+    // ===== Stripe webhook =====
+    if (pathname === '/api/stripe/webhook' && method === 'POST') {
+      const secret = env.STRIPE_WEBHOOK_SECRET;
+      if (!secret) return bad(res, 'Missing STRIPE_WEBHOOK_SECRET', 500);
+      const stripe = getStripe();
+      const sig = req.headers['stripe-signature'];
+      let event;
+      try {
+        event = stripe.webhooks.constructEvent(req.rawBody, sig, secret);
+      } catch (err) {
+        console.error('stripe webhook verify failed', err);
+        return bad(res, 'Invalid signature', 400);
+      }
+      const sheet = await getMasterSheet();
+      if (sheet) {
+        try {
+          await addSheet(sheet.id, 'Stripe Events', ['Timestamp', 'Type', 'ID']);
+        } catch {}
+        await appendRows(sheet.id, 'Stripe Events!A:C', [[new Date().toISOString(), event.type, event.id]]);
+      }
+      return ok(res, { received: true });
+    }
+
+    // ===== Telegram webhook =====
+    if (pathname === '/api/telegram/webhook' && method === 'POST') {
+      const token = env.TELEGRAM_BOT_TOKEN;
+      if (!token) return bad(res, 'No TELEGRAM_BOT_TOKEN', 501);
+      const update = typeof req.body === 'object' ? req.body : await readJson(req);
+      const message = update?.message?.text;
+      if (message === '/ping') {
+        const chatId = update.message.chat.id;
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: 'Mags online ✅' }),
+        });
+      }
+      return ok(res, { received: true });
     }
 
     if (pathname === '/api/diag/media' && method === 'GET') {
