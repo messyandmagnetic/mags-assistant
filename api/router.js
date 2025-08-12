@@ -105,6 +105,62 @@ export default async function handler(req, res) {
   try {
     const { pathname } = new URL(url, `http://${req.headers.host}`);
 
+    // dynamic modules for new api routes
+    if (pathname.startsWith('/api/diag/')) {
+      const name = pathname.slice('/api/diag/'.length);
+      try {
+        const mod = await import(`./diag/${name}.js`);
+        await mod.default(req, res);
+      } catch {
+        bad(res, 'Not found', 404);
+      }
+      return;
+    }
+
+    if (pathname.startsWith('/api/gmail/')) {
+      const name = pathname.slice('/api/gmail/'.length);
+      try {
+        const mod = await import(`./gmail/${name}.js`);
+        await mod.default(req, res);
+      } catch {
+        bad(res, 'Not found', 404);
+      }
+      return;
+    }
+
+    if (pathname.startsWith('/api/stripe/')) {
+      const name = pathname.slice('/api/stripe/'.length);
+      try {
+        const mod = await import(`./stripe/${name}.js`);
+        await mod.default(req, res);
+      } catch {
+        bad(res, 'Not found', 404);
+      }
+      return;
+    }
+
+    if (pathname.startsWith('/api/cron/')) {
+      const name = pathname.slice('/api/cron/'.length);
+      try {
+        const mod = await import(`./cron/${name}.js`);
+        await mod.default(req, res);
+      } catch {
+        bad(res, 'Not found', 404);
+      }
+      return;
+    }
+
+    if (pathname.startsWith('/api/admin/')) {
+      const name = pathname.slice('/api/admin/'.length);
+      try {
+        const mod = await import(`./admin/${name}.js`);
+        await mod.default(req, res);
+      } catch {
+        bad(res, 'Not found', 404);
+      }
+      return;
+    }
+
     // health / diag
     if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
     if (pathname === '/api/health' && method === 'GET') {
