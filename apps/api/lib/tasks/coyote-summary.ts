@@ -2,6 +2,270 @@ import { notion } from "../notion";
 import { getDrive } from "../../../lib/google.js";
 import type { TaskResult } from "./index";
 
+type Metrics = {
+  pledged_total: number;
+  received_total: number;
+  warm_leads: number;
+  hot_leads: number;
+  followups_due_count: number;
+  property_stage: string;
+  filing_status: string;
+  latest_onepager_url: string;
+  latest_budget_url: string;
+  latest_metrics_url: string;
+  latest_seller_letter_url: string;
+  notion_tracker_link: string;
+  sheets_tracker_link: string;
+};
+
+function num(env?: string) {
+  const n = env ? Number(env) : 0;
+  return isNaN(n) ? 0 : n;
+}
+
+function getMetrics(): Metrics {
+  return {
+    pledged_total: num(process.env.PLEDGED_TOTAL),
+    received_total: num(process.env.RECEIVED_TOTAL),
+    warm_leads: num(process.env.WARM_LEADS),
+    hot_leads: num(process.env.HOT_LEADS),
+    followups_due_count: num(process.env.FOLLOWUPS_DUE_COUNT),
+    property_stage: process.env.PROPERTY_STAGE || "No Offer",
+    filing_status: process.env.FILING_STATUS || "Not Started",
+    latest_onepager_url: process.env.LATEST_ONEPAGER_URL || "",
+    latest_budget_url: process.env.LATEST_BUDGET_URL || "",
+    latest_metrics_url: process.env.LATEST_METRICS_URL || "",
+    latest_seller_letter_url: process.env.LATEST_SELLER_LETTER_URL || "",
+    notion_tracker_link: process.env.NOTION_TRACKER_LINK || "",
+    sheets_tracker_link: process.env.SHEETS_TRACKER_LINK || "",
+  };
+}
+
+function statusEmoji(color: string) {
+  return color === "green" ? "🟢" : color === "yellow" ? "🟡" : "🔴";
+}
+
+function valueColor(value: number, target: number) {
+  if (value >= target * 0.75) return "green";
+  if (value >= target * 0.25) return "yellow";
+  return "red";
+}
+
+function stageColor(stage: string) {
+  const v = stage.toLowerCase();
+  if (v.includes("under contract") || v.includes("closed")) return "green";
+  if (v.includes("offer sent") || v.includes("offer prep")) return "yellow";
+  return "red";
+}
+
+function filingColor(status: string) {
+  const v = status.toLowerCase();
+  if (v.includes("filed") || v.includes("funded")) return "green";
+  if (v.includes("progress")) return "yellow";
+  return "red";
+}
+
+function buildDashboardBlocks(metrics: Metrics) {
+  const target = num(process.env.TARGET_PRICE) || 1;
+  const blocks: any[] = [];
+  blocks.push({
+    heading_2: { rich_text: [{ text: { content: "Status Light Dashboard" } }] },
+  });
+  // Top Row
+  blocks.push({
+    heading_3: { rich_text: [{ text: { content: "Top Row — Status Lights" } }] },
+  });
+  const top = [
+    {
+      bulleted_list_item: {
+        rich_text: [
+          {
+            text: {
+              content: `${statusEmoji(valueColor(metrics.pledged_total, target))} Pledged Total: $${metrics.pledged_total}`,
+            },
+          },
+        ],
+      },
+    },
+    {
+      bulleted_list_item: {
+        rich_text: [
+          {
+            text: {
+              content: `${statusEmoji(valueColor(metrics.received_total, target))} Received Total: $${metrics.received_total}`,
+            },
+          },
+        ],
+      },
+    },
+    {
+      bulleted_list_item: {
+        rich_text: [
+          {
+            text: {
+              content: `${statusEmoji("green")} Warm Leads Count: ${metrics.warm_leads}`,
+            },
+          },
+        ],
+      },
+    },
+    {
+      bulleted_list_item: {
+        rich_text: [
+          {
+            text: {
+              content: `${statusEmoji("green")} Hot Leads Count: ${metrics.hot_leads}`,
+            },
+          },
+        ],
+      },
+    },
+    {
+      bulleted_list_item: {
+        rich_text: [
+          {
+            text: {
+              content: `${statusEmoji("green")} Follow-Ups Due (Next 7 Days): ${metrics.followups_due_count}`,
+            },
+          },
+        ],
+      },
+    },
+  ];
+  blocks.push(...top);
+  // Middle Row
+  blocks.push({
+    heading_3: { rich_text: [{ text: { content: "Middle Row — Property Stage" } }] },
+  });
+  blocks.push({
+    bulleted_list_item: {
+      rich_text: [
+        {
+          text: {
+            content: `${statusEmoji(stageColor(metrics.property_stage))} Status: ${metrics.property_stage}`,
+          },
+        },
+      ],
+    },
+  });
+  blocks.push({
+    bulleted_list_item: {
+      rich_text: [
+        {
+          text: {
+            content: `${statusEmoji(filingColor(metrics.filing_status))} Filing Status: ${metrics.filing_status}`,
+          },
+        },
+      ],
+    },
+  });
+  // Bottom Row
+  blocks.push({
+    heading_3: { rich_text: [{ text: { content: "Bottom Row — Quick Links" } }] },
+  });
+  const links = [
+    metrics.latest_onepager_url && {
+      bulleted_list_item: {
+        rich_text: [
+          {
+            text: {
+              content: "One-Pager PDF",
+              link: { url: metrics.latest_onepager_url },
+            },
+          },
+        ],
+      },
+    },
+    metrics.latest_budget_url && {
+      bulleted_list_item: {
+        rich_text: [
+          { text: { content: "Budget PDF", link: { url: metrics.latest_budget_url } } },
+        ],
+      },
+    },
+    metrics.latest_metrics_url && {
+      bulleted_list_item: {
+        rich_text: [
+          { text: { content: "Impact Metrics Sheet", link: { url: metrics.latest_metrics_url } } },
+        ],
+      },
+    },
+    metrics.latest_seller_letter_url && {
+      bulleted_list_item: {
+        rich_text: [
+          { text: { content: "Seller Letter", link: { url: metrics.latest_seller_letter_url } } },
+        ],
+      },
+    },
+    metrics.notion_tracker_link && {
+      bulleted_list_item: {
+        rich_text: [
+          { text: { content: "Full Tracker in Notion", link: { url: metrics.notion_tracker_link } } },
+        ],
+      },
+    },
+    metrics.sheets_tracker_link && {
+      bulleted_list_item: {
+        rich_text: [
+          { text: { content: "Full Tracker in Google Sheets", link: { url: metrics.sheets_tracker_link } } },
+        ],
+      },
+    },
+  ].filter(Boolean);
+  blocks.push(...links);
+  return blocks;
+}
+
+async function updatePinnedPage({
+  parentId,
+  notionLink,
+  driveLink,
+  metrics,
+  today,
+}: {
+  parentId: string;
+  notionLink: string;
+  driveLink: string;
+  metrics: Metrics;
+  today: string;
+}) {
+  const title = "📌 Pinned: Mags Operational Summary & Dashboard";
+  const children = await notion.blocks.children.list({ block_id: parentId });
+  let pinned: any = children.results.find(
+    (b: any) => b.type === "child_page" && b.child_page?.title === title
+  );
+  if (!pinned) {
+    pinned = await notion.pages.create({
+      parent: { page_id: parentId },
+      properties: { title: { title: [{ text: { content: title } }] } },
+    });
+  }
+  const pageId = pinned.id || pinned?.["id"];
+  if (!pageId) return;
+  const existing = await notion.blocks.children.list({ block_id: pageId });
+  for (const b of existing.results) {
+    await notion.blocks.delete({ block_id: b.id });
+  }
+  const header = [
+    {
+      paragraph: {
+        rich_text: [{ text: { content: `Last Updated: ${today}` } }],
+      },
+    },
+    {
+      paragraph: {
+        rich_text: [
+          { text: { content: "Latest Summary (Notion)", link: { url: notionLink } } },
+          { text: { content: " | " } },
+          { text: { content: "Drive", link: { url: driveLink } } },
+        ],
+      },
+    },
+  ];
+  const blocks = [...header, ...buildDashboardBlocks(metrics)];
+  await notion.blocks.children.append({ block_id: pageId, children: blocks });
+}
+
 function buildSummary() {
   const today = new Date().toISOString().slice(0, 10);
   const title = `Mags — Coyote Commons Acquisition Summary (${today})`;
@@ -11,6 +275,8 @@ function buildSummary() {
 
 export async function updateCoyoteSummary(): Promise<TaskResult> {
   const { title, content } = buildSummary();
+  const today = new Date().toISOString().slice(0, 10);
+  const metrics = getMetrics();
   let notionLink = "";
   let driveLink = "";
   try {
@@ -59,9 +325,18 @@ export async function updateCoyoteSummary(): Promise<TaskResult> {
         await drive.files.delete({ fileId: f.id });
       }
     }
+    if (process.env.NOTION_TOKEN && process.env.COYOTE_NOTION_PAGE_ID) {
+      await updatePinnedPage({
+        parentId: process.env.COYOTE_NOTION_PAGE_ID,
+        notionLink,
+        driveLink,
+        metrics,
+        today,
+      });
+    }
     // Telegram notification
     if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
-      const text = `Summary updated\nDate: ${new Date().toLocaleString()}\nNotion: ${notionLink}\nDrive: ${driveLink}`;
+      const text = `Summary updated & pinned with dashboard\nDate: ${new Date().toLocaleString()}\nNotion: ${notionLink}\nDrive: ${driveLink}`;
       await fetch(
         `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`,
         {
