@@ -3,29 +3,103 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Maggie Check</title>
+  <title>System Check</title>
   <link rel="stylesheet" href="/brand.css">
-  <style>body{font-family:sans-serif;padding:20px}button{margin:0.5rem}</style>
 </head>
 <body>
-<div class="container">
-  <h1>System Check</h1>
-  <div><button id="ping">Ping Telegram</button> <span id="pingRes"></span></div>
-  <div><button id="tally">Test Tally OK</button> <span id="tallyRes"></span></div>
-  <div><button id="stripe">Test Stripe OK</button> <span id="stripeRes"></span></div>
-  <div><button id="notion">Show Notion status</button> <span id="notionRes"></span></div>
-  <div><button id="publish">Cron Publish Queue (dry-run)</button> <span id="publishRes"></span></div>
-  <div><button id="queueHead">List Queue Head</button> <span id="queueHeadRes"></span></div>
-  <p><a href="https://mags-assistant.vercel.app">Vercel Prod</a></p>
-</div>
+  <div class="container">
+    <h1>System Check</h1>
+    <ul id="probes"></ul>
+    <div id="controls">
+      <button id="btn-sync">Sync</button> <span id="sync-status"></span>
+      <button id="btn-audit">Audit</button> <span id="audit-status"></span>
+    </div>
+    <p><a href="https://mags-assistant.vercel.app">Vercel Prod</a></p>
+  </div>
+
 <script>
-async function call(id, method, url, body, headers){const res=document.getElementById(id+'Res');res.textContent='…';try{const baseHeaders={'content-type':'application/json',...(headers||{})};if(method==='POST'){baseHeaders['X-Fetch-Pass']=localStorage.getItem('fetch-pass')||'';}const r=await fetch(url,{method,headers:baseHeaders,body:body?JSON.stringify(body):undefined});const j=await r.json();res.textContent=j.ok?'ok':'fail'}catch(e){res.textContent='error'}}
-document.getElementById('ping').onclick=()=>call('ping','POST','/api/telegram/send',{text:'ping'});
-document.getElementById('tally').onclick=()=>call('tally','POST','/api/tally/webhook',{check:true});
-document.getElementById('stripe').onclick=()=>call('stripe','POST','/api/stripe/webhook',{});
-document.getElementById('notion').onclick=()=>call('notion','GET','/diag');
-document.getElementById('publish').onclick=()=>call('publish','POST','/api/cron/publish-queue?dry=1',{});
-document.getElementById('queueHead').onclick=()=>call('queueHead','GET','/api/queue/head');
+  // --- CONFIG ---
+  const WORKER_BASE = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
+  const ENDPOINTS = [
+    { name: 'Worker /health', url: `${WORKER_BASE}/health` },
+    { name: 'Worker /api/stripe/sync',  url: `${WORKER_BASE}/api/stripe/sync` },
+    { name: 'Worker /api/stripe/audit', url: `${WORKER_BASE}/api/stripe/audit` },
+  ];
+
+  // Optional: set this in DevTools for gated calls
+  // window.FETCH_PASS = 'your-secret';
+
+  function color(el, ok, msg) {
+    el.textContent = msg;
+    el.style.color = ok ? 'green' : 'crimson';
+  }
+
+  async function safeJSON(res) {
+    const txt = await res.text();
+    try   { return { ok: true, data: JSON.parse(txt) }; }
+    catch { return { ok: true, data: { raw: txt } }; }
+  }
+
+  async function probeAll() {
+    const ul = document.getElementById('probes');
+    ul.innerHTML = '';
+    for (const ep of ENDPOINTS) {
+      const li = document.createElement('li');
+      li.textContent = `${ep.name}: probing…`;
+      ul.appendChild(li);
+      try {
+        const r = await fetch(ep.url, { method: 'GET' });
+        li.textContent = `${ep.name}: ${r.ok ? 'ok' : `HTTP ${r.status}`}`;
+        li.style.color = r.ok ? 'green' : 'crimson';
+      } catch (e) {
+        li.textContent = `${ep.name}: network error`;
+        li.style.color = 'crimson';
+      }
+    }
+  }
+
+  async function postJSON(url) {
+    const headers = { 'Content-Type': 'application/json' };
+    if (window.FETCH_PASS) headers['X-Fetch-Pass'] = window.FETCH_PASS;
+
+    const res = await fetch(url, { method: 'POST', headers, body: '{}' });
+    const body = await safeJSON(res);
+    return { ok: res.ok, data: body.data };
+  }
+
+  // Button wiring
+  document.getElementById('btn-sync').addEventListener('click', async () => {
+    const el = document.getElementById('sync-status');
+    color(el, true, 'syncing…');
+    try {
+      const { ok, data } = await postJSON(`${WORKER_BASE}/api/stripe/sync`);
+      color(el, ok, ok ? 'synced' : `sync failed`);
+      if (!ok) console.warn('sync error', data);
+    } catch (e) {
+      color(el, false, 'sync network error');
+    }
+  });
+
+  document.getElementById('btn-audit').addEventListener('click', async () => {
+    const el = document.getElementById('audit-status');
+    color(el, true, 'auditing…');
+    try {
+      const { ok, data } = await postJSON(`${WORKER_BASE}/api/stripe/audit`);
+      color(el, ok, ok ? 'audited' : `audit failed`);
+      if (!ok) console.warn('audit error', data);
+    } catch (e) {
+      color(el, false, 'audit network error');
+    }
+  });
+
+  // Kick off probe on load
+  probeAll();
 </script>
+
+<style>
+  #probes { line-height: 1.6; }
+  #controls { margin-top: 1rem; }
+  button { margin-right: .5rem }
+</style>
 </body>
 </html>
