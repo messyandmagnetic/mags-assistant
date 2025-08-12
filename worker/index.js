@@ -1,15 +1,39 @@
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
-    const { pathname, searchParams } = url;
+    const { pathname } = url;
     const method = request.method;
 
+    // --- CORS ---
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': 'Content-Type, X-Fetch-Pass',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS'
+    };
+    if (method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: cors });
+    }
+
+    // auth gate only for POST if FETCH_PASS is set
+    const requirePass = !!env.FETCH_PASS;
+    const pass = request.headers.get('X-Fetch-Pass');
+    if (requirePass && method === 'POST' && pass !== env.FETCH_PASS) {
+      return new Response(JSON.stringify({ ok: false, error: 'forbidden' }), {
+        status: 401,
+        headers: { ...cors, 'Content-Type': 'application/json' }
+      });
+    }
+
     // helper to return JSON
-    const json = (obj, status=200, headers={}) => new Response(JSON.stringify(obj), {status, headers: { 'content-type': 'application/json', ...headers }});
+    const json = (obj, status = 200, headers = {}) =>
+      new Response(JSON.stringify(obj), {
+        status,
+        headers: { ...cors, 'Content-Type': 'application/json', ...headers }
+      });
 
     // health check
     if (pathname === '/health' && method === 'GET') {
-      return json({ ok: true });
+      return json({ ok: true, service: 'worker' });
     }
 
     // diag endpoint summarizing env availability
@@ -80,6 +104,24 @@ export default {
       }
       console.log('stripe event size', payload.length);
       return json({ ok: true });
+    }
+
+    // stripe sync/audit stubs
+    if (pathname === '/api/stripe/sync') {
+      if (method === 'GET') {
+        return json({ ok: true, action: 'sync', hint: 'POST to trigger' });
+      }
+      if (method === 'POST') {
+        return json({ ok: true, action: 'sync', ts: Date.now() });
+      }
+    }
+    if (pathname === '/api/stripe/audit') {
+      if (method === 'GET') {
+        return json({ ok: true, action: 'audit', hint: 'POST to trigger' });
+      }
+      if (method === 'POST') {
+        return json({ ok: true, action: 'audit', ts: Date.now() });
+      }
     }
 
     // queue endpoints
