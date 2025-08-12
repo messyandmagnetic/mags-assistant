@@ -1,9 +1,13 @@
 {
-  "version": 2,
-  "builds": [
-    { "src": "next.config.js", "use": "@vercel/next" }
+  "rewrites": [
+    { "source": "/check", "destination": "/check.html" }
   ],
-  "routes": [
-    { "src": "/(.*)", "dest": "/" }
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
+      ]
+    }
   ]
 }
