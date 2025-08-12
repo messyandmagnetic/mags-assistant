@@ -4,7 +4,7 @@ export const runtime = 'nodejs';
 
 export async function GET() {
   const base = env.GOOGLE_KEY_URL ? env.GOOGLE_KEY_URL.replace(/\/mags-key$/, '') : '';
-  const out: Record<string, string> = {};
+  const out: Record<string, string | boolean> = { ok: true };
   try {
     const r1 = await fetch(`${base}/health`);
     out.worker = r1.ok ? 'ok' : `status ${r1.status}`;

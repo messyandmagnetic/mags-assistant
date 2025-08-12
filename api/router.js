@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
     if (pathname === '/api/health' && method === 'GET') {
       const base = env.GOOGLE_KEY_URL ? env.GOOGLE_KEY_URL.replace(/\/mags-key$/, '') : '';
-      const out = {};
+      const out = { ok: true };
       try {
         const r1 = await fetch(`${base}/health`);
         out.worker = r1.ok ? 'ok' : `status ${r1.status}`;
@@ -126,6 +126,56 @@ export default async function handler(req, res) {
         out.key = 'error';
       }
       return res.status(200).json(out);
+    }
+
+    if (pathname === '/api/diag/notion' && method === 'GET') {
+      if (!env.NOTION_TOKEN) return res.status(200).json({ ok: false, reason: 'missing NOTION_TOKEN' });
+      try {
+        const r = await fetch('https://api.notion.com/v1/users/me', {
+          headers: {
+            Authorization: `Bearer ${env.NOTION_TOKEN}`,
+            'Notion-Version': '2022-06-28',
+          },
+        });
+        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
+      } catch (e) {
+        return res.status(200).json({ ok: false, reason: e.message });
+      }
+    }
+
+    if (pathname === '/api/diag/stripe' && method === 'GET') {
+      if (!env.STRIPE_SECRET_KEY) return res.status(200).json({ ok: false, reason: 'missing STRIPE_SECRET_KEY' });
+      try {
+        const r = await fetch('https://api.stripe.com/v1/balance', {
+          headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
+        });
+        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
+      } catch (e) {
+        return res.status(200).json({ ok: false, reason: e.message });
+      }
+    }
+
+    if (pathname === '/api/diag/telegram' && method === 'GET') {
+      if (!env.TELEGRAM_BOT_TOKEN)
+        return res.status(200).json({ ok: false, reason: 'missing TELEGRAM_BOT_TOKEN' });
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
+        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
+      } catch (e) {
+        return res.status(200).json({ ok: false, reason: e.message });
+      }
+    }
+
+    if (pathname === '/api/diag/tally' && method === 'GET') {
+      if (!env.TALLY_API_KEY) return res.status(200).json({ ok: false, reason: 'missing TALLY_API_KEY' });
+      try {
+        const r = await fetch('https://api.tally.so/forms', {
+          headers: { Authorization: `Bearer ${env.TALLY_API_KEY}` },
+        });
+        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
+      } catch (e) {
+        return res.status(200).json({ ok: false, reason: e.message });
+      }
     }
 
     if (pathname === '/api/drive/review' && (method === 'GET' || method === 'POST')) {

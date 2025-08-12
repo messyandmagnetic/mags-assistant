@@ -7,9 +7,11 @@ on:
 
 jobs:
   run:
+    if: env.USE_GH_CRON == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
+      USE_GH_CRON: ${{ secrets.USE_GH_CRON }}
       API_BASE: ${{ secrets.API_BASE }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
