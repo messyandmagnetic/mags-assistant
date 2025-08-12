@@ -29,6 +29,7 @@ import { spawnSync } from 'child_process';
 import { ensureStripeSchema, backfillDefaults } from '../lib/notion-stripe.js';
 import { createSpreadsheet, addSheet, appendRows, getDrive } from '../lib/google.js';
 import crypto from 'crypto';
+import { log as logEntry } from '../lib/logger.js';
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -100,6 +101,13 @@ export default async function handler(req, res) {
 
     // health / diag
     if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
+    if (pathname === '/api/health' && method === 'GET') {
+      return ok(res, {
+        time: new Date().toISOString(),
+        gitSha: process.env.GIT_SHA || 'dev',
+        uptime: process.uptime(),
+      });
+    }
     if (pathname === '/api/rpa/health') {
       if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
       return ok(res, {});
@@ -157,11 +165,25 @@ export default async function handler(req, res) {
     }
 
     // ===== Tally webhook =====
-    if (pathname === '/api/tally/webhook' && method === 'POST') {
+    if ((pathname === '/api/tally' || pathname === '/api/tally/webhook') && method === 'POST') {
       const secret = env.TALLY_WEBHOOK_SECRET;
-      const sig = req.headers['x-tally-signature'] || req.headers['tally-signature'];
-      if (secret && sig !== secret) return bad(res, 'Unauthorized', 401);
+      const auth = req.headers['authorization'];
+      const sig = req.headers['tally-signature'] || req.headers['x-tally-signature'];
+      if (secret) {
+        let okSig = false;
+        if (auth && auth === `Bearer ${secret}`) {
+          okSig = true;
+        } else if (sig) {
+          const h = crypto
+            .createHmac('sha256', secret)
+            .update(req.rawBody || '')
+            .digest('hex');
+          okSig = sig === h;
+        }
+        if (!okSig) return bad(res, 'Unauthorized', 401);
+      }
       const body = typeof req.body === 'object' ? req.body : await readJson(req);
+      await logEntry('tally', 'webhook', { formId: body?.formId || body?.event?.formId });
       const sheet = await getMasterSheet();
       if (!sheet) return bad(res, 'Master sheet missing', 500);
       const title = body?.event?.formName || body?.formName;
@@ -178,7 +200,7 @@ export default async function handler(req, res) {
     }
 
     // ===== Stripe webhook =====
-    if (pathname === '/api/stripe/webhook' && method === 'POST') {
+    if ((pathname === '/api/stripe/webhook' || pathname === '/api/stripe-webhook') && method === 'POST') {
       const secret = env.STRIPE_WEBHOOK_SECRET;
       if (!secret) return bad(res, 'Missing STRIPE_WEBHOOK_SECRET', 500);
       const stripe = getStripe();
@@ -190,6 +212,7 @@ export default async function handler(req, res) {
         console.error('stripe webhook verify failed', err);
         return bad(res, 'Invalid signature', 400);
       }
+      await logEntry('stripe', 'event', { type: event.type, id: event.id });
       const sheet = await getMasterSheet();
       if (sheet) {
         try {
@@ -201,17 +224,30 @@ export default async function handler(req, res) {
     }
 
     // ===== Telegram webhook =====
-    if (pathname === '/api/telegram/webhook' && method === 'POST') {
+    if ((pathname === '/api/telegram' || pathname === '/api/telegram/webhook') && method === 'POST') {
       const token = env.TELEGRAM_BOT_TOKEN;
       if (!token) return bad(res, 'No TELEGRAM_BOT_TOKEN', 501);
       const update = typeof req.body === 'object' ? req.body : await readJson(req);
-      const message = update?.message?.text;
-      if (message === '/ping') {
-        const chatId = update.message.chat.id;
+      const chatId = update?.message?.chat?.id || env.TELEGRAM_CHAT_ID;
+      const text = (update?.message?.text || '').trim();
+      await logEntry('telegram', 'incoming', { text });
+      let reply = null;
+      if (text === '/ping') reply = 'pong ✅';
+      if (text === '/status') reply = 'ok';
+      if (text === '/links') {
+        reply = [
+          env.NEXT_PUBLIC_SITE_URL || 'https://assistant.messyandmagnetic.com',
+          env.MASTER_MEMORY_SHEET_ID || 'memory sheet n/a',
+          env.NOTION_HQ_PAGE_ID ? `https://notion.so/${env.NOTION_HQ_PAGE_ID}` : 'notion n/a',
+        ].join('\n');
+      }
+      if (text === '/pricecheck') reply = 'price audit not implemented';
+      if (!reply && /quiz|blueprint|email|pdf/i.test(text)) reply = 'job queued';
+      if (reply && chatId) {
         await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: 'Mags online ✅' }),
+          body: JSON.stringify({ chat_id: chatId, text: reply }),
         });
       }
       return ok(res, { received: true });
