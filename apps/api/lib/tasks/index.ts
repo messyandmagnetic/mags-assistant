@@ -10,6 +10,7 @@ import { socialRefreshAnalytics } from "./social-analytics";
 import { stripeAudit } from "./stripe-audit";
 import { outreachRun } from "./outreach";
 import { socialGenerateDrafts } from "./social-drafts";
+import { updateCoyoteSummary } from "./coyote-summary";
 
 export type TaskResult = { name: string; ok: boolean; msg?: string };
 export type TaskFn = () => Promise<TaskResult>;
@@ -26,6 +27,7 @@ export const tasks: Record<string, TaskFn> = {
   "social.generate_drafts": socialGenerateDrafts,
   "stripe.audit": stripeAudit,
   "outreach.run": outreachRun,
+  "coyote.summary": updateCoyoteSummary,
 };
 
 const taskFlags: Record<string, string> = {
@@ -40,6 +42,7 @@ const taskFlags: Record<string, string> = {
   "social.generate_drafts": "TASK_SOCIAL_GENERATE_DRAFTS",
   "stripe.audit": "TASK_STRIPE_AUDIT",
   "outreach.run": "TASK_OUTREACH_RUN",
+  "coyote.summary": "TASK_COYOTE_SUMMARY",
 };
 
 export async function runTasks(selected?: string[]) {
