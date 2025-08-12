@@ -48,6 +48,34 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    if (text.startsWith('/')) {
+      const [cmd, ...args] = text.split(' ');
+      switch (cmd) {
+        case '/queue':
+          await sendTelegram('Queue is empty.');
+          break;
+        case '/approve':
+          await sendTelegram(`Approved ${args.join(' ')}`);
+          break;
+        case '/rework':
+          await sendTelegram(`Rework ${args[0] ?? ''}`);
+          break;
+        case '/report':
+          await sendTelegram('No report available.');
+          break;
+        case '/link':
+          const scopes = [
+            `Buffer: ${process.env.BUFFER_ACCESS_TOKEN ? 'on' : 'missing BUFFER_ACCESS_TOKEN'}`,
+            `Notion: ${process.env.NOTION_TOKEN ? 'on' : 'missing NOTION_TOKEN'}`,
+          ];
+          await sendTelegram(scopes.join('\n'));
+          break;
+        default:
+          await sendTelegram('Unknown command');
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     const res = await fetch(`${process.env.API_BASE ?? ''}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
