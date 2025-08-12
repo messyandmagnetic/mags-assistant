@@ -93,7 +93,7 @@ async function notify(subject, message) {
 }
 
 async function getMasterSheet() {
-  const drive = getDrive();
+  const drive = await getDrive();
   const q = `name='Master Memory — Messy & Magnetic' and mimeType='application/vnd.google-apps.spreadsheet' and '${env.MM_DRIVE_ROOT_ID}' in parents`;
   const r = await drive.files.list({ q, fields: 'files(id, webViewLink)' });
   return r.data.files && r.data.files[0] ? r.data.files[0] : null;
@@ -108,11 +108,24 @@ export default async function handler(req, res) {
     // health / diag
     if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
     if (pathname === '/api/health' && method === 'GET') {
-      return ok(res, {
-        time: new Date().toISOString(),
-        gitSha: process.env.GIT_SHA || 'dev',
-        uptime: process.uptime(),
-      });
+      const base = env.GOOGLE_KEY_URL ? env.GOOGLE_KEY_URL.replace(/\/mags-key$/, '') : '';
+      const out = {};
+      try {
+        const r1 = await fetch(`${base}/health`);
+        out.worker = r1.ok ? 'ok' : `status ${r1.status}`;
+      } catch {
+        out.worker = 'error';
+      }
+      try {
+        const r2 = await fetch(env.GOOGLE_KEY_URL || '', {
+          headers: { Authorization: `Bearer ${env.FETCH_PASS || ''}` },
+        });
+        const txt = await r2.text();
+        out.key = r2.ok && txt.trim() ? 'ok' : `status ${r2.status}`;
+      } catch {
+        out.key = 'error';
+      }
+      return res.status(200).json(out);
     }
 
     if (pathname === '/api/drive/review' && (method === 'GET' || method === 'POST')) {

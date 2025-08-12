@@ -9,7 +9,7 @@ export async function runPriceAudit() {
     return 0;
   }
   await log('price_audit', 'start');
-  const sheets = getSheets();
+  const sheets = await getSheets();
   const res = await sheets.spreadsheets.values.get({
     spreadsheetId: sheetId,
     range: 'Stripe_Catalog!A:Z',

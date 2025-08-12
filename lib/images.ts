@@ -2,19 +2,20 @@ import { google } from 'googleapis';
 import { env } from './env.js';
 import { getStripe } from './clients/stripe.js';
 import { getOpenAI } from './clients/openai';
+import { fetchGoogleKey } from './google-key.js';
 
-function getDrive() {
+async function getDrive() {
   const auth = new google.auth.JWT(
     process.env.GOOGLE_CLIENT_EMAIL,
     undefined,
-    (process.env.GOOGLE_PRIVATE_KEY || '').replace(/\\n/g, '\n'),
+    (await fetchGoogleKey()).replace(/\\n/g, '\n'),
     ['https://www.googleapis.com/auth/drive.readonly']
   );
   return google.drive({ version: 'v3', auth });
 }
 
 export async function driveDownloadFirstImage(folderId: string) {
-  const drive = getDrive();
+  const drive = await getDrive();
   const res = await drive.files.list({
     q: `'${folderId}' in parents and trashed=false and mimeType contains 'image/'`,
     pageSize: 10,
@@ -41,7 +42,7 @@ export async function findImageForProduct({
     if (match) folderId = match[0];
     if (!match) {
       try {
-        const drive = getDrive();
+        const drive = await getDrive();
         const search = await drive.files.list({
           q: `name='${imageFolder}' and '${env.DRIVE_PRODUCT_IMAGES_ROOT_ID}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
           fields: 'files(id)',
