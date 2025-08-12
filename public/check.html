@@ -10,6 +10,14 @@
 <div class="container">
   <h1>System Check</h1>
   <ul id="results"></ul>
+  <div class="mt-4">
+    <button id="btn-sync" class="mr-2">Sync Stripe → Notion (run now)</button>
+    <span id="sync-status" class="status"></span>
+  </div>
+  <div class="mt-2">
+    <button id="btn-audit" class="mr-2">Run Price Audit (suggest)</button>
+    <span id="audit-status" class="status"></span>
+  </div>
 </div>
 <script>
 const endpoints = [
@@ -21,6 +29,7 @@ const endpoints = [
 ];
 const params = new URLSearchParams(location.search);
 const worker = params.get('worker');
+const key = params.get('key');
 if (worker) {
   endpoints.push({ name: 'worker health', url: worker.replace(/\/$/, '') + '/health' });
 }
@@ -39,7 +48,30 @@ endpoints.forEach(ep => {
       li.textContent = ep.name + ': FAIL (network)';
     });
 });
+function updateStatus(el, ok, text) {
+  el.textContent = text;
+  el.style.color = ok ? 'green' : 'red';
+}
+const syncStatus = document.getElementById('sync-status');
+const auditStatus = document.getElementById('audit-status');
+
+document.getElementById('btn-sync').onclick = async () => {
+  updateStatus(syncStatus, true, 'running...');
+  const res = await fetch('/api/stripe/sync-products' + (key ? `?key=${key}` : ''), { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  const ok = res.ok && data.ok !== false;
+  const msg = ok ? `upserts ${data.upserts} @ ${new Date().toLocaleTimeString()}` : 'failed';
+  updateStatus(syncStatus, ok, msg);
+};
+
+document.getElementById('btn-audit').onclick = async () => {
+  updateStatus(auditStatus, true, 'running...');
+  const res = await fetch('/api/stripe/price-audit' + (key ? `?key=${key}` : ''), { method: 'POST' });
+  const data = await res.json().catch(() => ({}));
+  const ok = res.ok && data.ok !== false;
+  const msg = ok ? `audited ${data.audited} @ ${new Date().toLocaleTimeString()}` : 'failed';
+  updateStatus(auditStatus, ok, msg);
+};
 </script>
 </body>
 </html>
-
