@@ -10,7 +10,8 @@
     "link-check": "tsx scripts/link_check.ts",
     "memory:compact": "tsx scripts/memory/compact.ts",
     "social:health": "tsx scripts/social_health.ts",
-    "social:self-test": "tsx scripts/connectivity_self_test.ts"
+    "social:self-test": "tsx scripts/connectivity_self_test.ts",
+    "get:preview": "node scripts/get-vercel-preview.js"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
@@ -18,5 +19,8 @@
     "stripe": "^14.0.0",
     "googleapis": "^131.0.0",
     "raw-body": "^2.5.2"
+  },
+  "engines": {
+    "node": ">=20 <23"
   }
 }
