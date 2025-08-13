@@ -14,7 +14,10 @@
     { "source": "/api/cron/daily",       "destination": "/api/router?action=cron_daily" },
     { "source": "/api/cron/digest",      "destination": "/api/router?action=cron_digest" },
     { "source": "/api/cron/stripe-poll", "destination": "/api/router?action=cron_stripe_poll" },
-    { "source": "/api/cron/gmail-scan",  "destination": "/api/router?action=cron_gmail_scan" }
+    { "source": "/api/cron/gmail-scan",  "destination": "/api/router?action=cron_gmail_scan" },
+    { "source": "/api/telegram/command", "destination": "/api/router?action=telegram_command" },
+    { "source": "/api/telegram/poll",    "destination": "/api/router?action=telegram_poll" },
+    { "source": "/api/telegram/webhook", "destination": "/api/router?action=telegram_webhook" }
   ],
   "headers": [
     {
