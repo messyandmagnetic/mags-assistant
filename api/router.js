@@ -221,8 +221,138 @@ async function diag_cron(req, res) {
       daily: mk('daily'),
       'stripe-poll': mk('stripe-poll'),
       'gmail-scan': mk('gmail-scan'),
+      'telegram-poll': mk('telegram-poll'),
     },
   });
+}
+
+async function updateTiktokCallout(status, lastAuth) {
+  const pageId = env.NOTION_HQ_PAGE_ID;
+  if (!pageId) return;
+  try {
+    const text = `TikTok: ${status}${lastAuth ? ` (LastAuth ${lastAuth})` : ''}`;
+    const list = await notion.blocks.children.list({ block_id: pageId, page_size: 100 });
+    const existing = (list.results || []).find(
+      (b) => b.type === 'callout' && b.callout?.rich_text?.[0]?.plain_text.startsWith('TikTok:')
+    );
+    const callout = {
+      callout: {
+        rich_text: [{ type: 'text', text: { content: text } }],
+        icon: { emoji: '🎵' },
+      },
+    };
+    if (existing) {
+      await notion.blocks.update({ block_id: existing.id, ...callout });
+    } else {
+      await notion.blocks.children.append({ block_id: pageId, children: [callout] });
+    }
+  } catch {}
+}
+
+async function tiktok_auth_start(req, res) {
+  const { TIKTOK_APP_ID, TIKTOK_REDIRECT_URL } = env;
+  const next_steps = [];
+  if (!TIKTOK_APP_ID) next_steps.push('Set TIKTOK_APP_ID');
+  if (!TIKTOK_REDIRECT_URL) next_steps.push('Set TIKTOK_REDIRECT_URL');
+  if (next_steps.length) return res.json({ ok: false, reason: 'missing config', next_steps });
+  const url =
+    `https://www.tiktok.com/auth/authorize/?client_key=${encodeURIComponent(
+      TIKTOK_APP_ID
+    )}` +
+    `&scope=user.info.basic&response_type=code&redirect_uri=${encodeURIComponent(
+      TIKTOK_REDIRECT_URL
+    )}`;
+  return ok(res, { url });
+}
+
+async function tiktok_auth_callback(req, res) {
+  const { TIKTOK_APP_ID, TIKTOK_APP_SECRET, TIKTOK_REDIRECT_URL } = env;
+  const url = new URL(req.url, 'http://x');
+  const code = url.searchParams.get('code') || req.body?.code;
+  const next_steps = [];
+  if (!TIKTOK_APP_ID) next_steps.push('Set TIKTOK_APP_ID');
+  if (!TIKTOK_APP_SECRET) next_steps.push('Set TIKTOK_APP_SECRET');
+  if (!TIKTOK_REDIRECT_URL) next_steps.push('Set TIKTOK_REDIRECT_URL');
+  if (!code) next_steps.push('Provide code');
+  if (next_steps.length)
+    return res.json({ ok: false, reason: 'missing config', next_steps });
+  try {
+    const r = await fetch('https://open.tiktokapis.com/v2/oauth/token/', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        client_key: TIKTOK_APP_ID,
+        client_secret: TIKTOK_APP_SECRET,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: TIKTOK_REDIRECT_URL,
+      }),
+    });
+    const data = await r.json();
+    const access = data.access_token;
+    const refresh = data.refresh_token;
+    if (!access) throw new Error(data.message || 'no access_token');
+    process.env.TIKTOK_ACCESS_TOKEN = access;
+    process.env.TIKTOK_REFRESH_TOKEN = refresh;
+    const mask = (t) => (t ? `${t.slice(0, 4)}...${t.slice(-4)}` : '');
+    try {
+      const profileDbId = await ensureProfileDb({
+        notion,
+        hqPageId: env.NOTION_HQ_PAGE_ID,
+      });
+      if (profileDbId) {
+        const now = new Date().toISOString();
+        const rows = [
+          { key: 'TIKTOK_ACCESS_TOKEN', val: mask(access) },
+          { key: 'TIKTOK_REFRESH_TOKEN', val: mask(refresh) },
+          { key: 'TIKTOK_LAST_AUTH', val: now },
+        ];
+        for (const r of rows) {
+          await notion.pages.create({
+            parent: { database_id: profileDbId },
+            properties: {
+              Key: { title: [{ text: { content: r.key } }] },
+              Value: { rich_text: [{ text: { content: r.val } }] },
+            },
+          });
+        }
+        await updateTiktokCallout('Connected', now);
+      }
+    } catch {}
+    try {
+      const sheetId = env.MASTER_MEMORY_SHEET_ID;
+      if (sheetId) {
+        await appendRows(sheetId, 'TikTok!A2', [[
+          data.open_id || '',
+          'Connected',
+          new Date().toISOString(),
+          mask(access),
+          '',
+        ]]);
+      }
+    } catch {}
+    return ok(res, { connected: true });
+  } catch (e) {
+    return res.json({ ok: false, reason: e.message });
+  }
+}
+
+async function diag_tiktok(req, res) {
+  const token = process.env.TIKTOK_ACCESS_TOKEN || env.TIKTOK_ACCESS_TOKEN;
+  const next_steps = [];
+  if (!token) next_steps.push('Connect TikTok');
+  if (next_steps.length)
+    return res.json({ ok: false, reason: 'missing token', next_steps });
+  try {
+    const r = await fetch('https://open.tiktokapis.com/v2/user/info/', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const data = await r.json();
+    if (data?.data) return ok(res, { user: data.data });
+    return res.json({ ok: false, reason: data.message || 'bad response' });
+  } catch (e) {
+    return res.json({ ok: false, reason: e.message });
+  }
 }
 
 // Telegram commands and polling
@@ -454,6 +584,9 @@ async function cron_gmail_scan(req, res) {
     diag_telegram,
     diag_drive,
     diag_cron,
+    diag_tiktok,
+    tiktok_auth_start,
+    tiktok_auth_callback,
     telegram_command,
     telegram_webhook,
     telegram_poll,
@@ -488,6 +621,7 @@ export default async function handler(req, res) {
         '/api/diag/telegram': 'diag_telegram',
         '/api/diag/drive': 'diag_drive',
         '/api/diag/cron': 'diag_cron',
+        '/api/diag/tiktok': 'diag_tiktok',
         '/api/stripe/audit': 'stripe_audit',
           '/api/stripe/webhook': 'stripe_webhook',
           '/api/gmail/scan': 'gmail_scan',
@@ -499,6 +633,8 @@ export default async function handler(req, res) {
           '/api/telegram/command': 'telegram_command',
           '/api/telegram/poll': 'telegram_poll',
           '/api/telegram/webhook': 'telegram_webhook',
+          '/api/tiktok/auth/start': 'tiktok_auth_start',
+          '/api/tiktok/auth/callback': 'tiktok_auth_callback',
         };
       action = pathActionMap[parsed.pathname];
     }
