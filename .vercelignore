@@ -1,0 +1,6 @@
+**/*.php
+**/*.py
+**/*.rb
+**/*.go
+now.json
+**/vercel.json
