@@ -100,16 +100,50 @@ export default {
     }
 
     // stripe webhook
-    if (pathname === '/api/stripe/webhook' && method === 'POST') {
-      const signature = request.headers.get('stripe-signature');
+    if (pathname === '/api/stripe/webhook') {
+      if (method !== 'POST') {
+        return json({ ok: false, error: 'method not allowed' }, 405);
+      }
+      const secret = env.STRIPE_WEBHOOK_SECRET;
+      if (!secret) {
+        return json({ ok: false, error: 'missing env' }, 500);
+      }
+      const sigHeader = request.headers.get('stripe-signature');
+      if (!sigHeader) {
+        return json({ ok: false, error: 'missing stripe-signature' }, 400);
+      }
       const payload = await request.text();
-      if (env.STRIPE_WEBHOOK_SECRET) {
-        try {
-          const stripe = new (await import('stripe')).default(env.STRIPE_SECRET_KEY || '', { apiVersion: '2023-10-16' });
-          stripe.webhooks.constructEvent(payload, signature, env.STRIPE_WEBHOOK_SECRET);
-        } catch (err) {
-          return new Response('invalid signature', { status: 400 });
+      const parts = sigHeader.split(',').reduce((acc, p) => {
+        const [k, v] = p.split('=');
+        acc[k] = v;
+        return acc;
+      }, {});
+      const timestamp = parts.t;
+      const signature = parts.v1;
+      if (!timestamp || !signature) {
+        return json({ ok: false, error: 'invalid signature header' }, 400);
+      }
+      const encoder = new TextEncoder();
+      const key = await crypto.subtle.importKey(
+        'raw',
+        encoder.encode(secret),
+        { name: 'HMAC', hash: 'SHA-256' },
+        false,
+        ['sign']
+      );
+      const data = encoder.encode(`${timestamp}.${payload}`);
+      const mac = await crypto.subtle.sign('HMAC', key, data);
+      const expected = [...new Uint8Array(mac)].map(b => b.toString(16).padStart(2, '0')).join('');
+      let valid = signature.length === expected.length;
+      if (valid) {
+        let diff = 0;
+        for (let i = 0; i < expected.length; i++) {
+          diff |= expected.charCodeAt(i) ^ signature.charCodeAt(i);
         }
+        valid = diff === 0;
+      }
+      if (!valid) {
+        return json({ ok: false, error: 'invalid signature' }, 400);
       }
       console.log('stripe event size', payload.length);
       return json({ ok: true });
