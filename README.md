@@ -17,9 +17,10 @@ Test links:
 
 ## API map
 
+- `GET /api/ping` – simple health ping
+- `GET /api/status` – service status summary
 - `POST /api/ops?action=status` – list present env vars
 - `POST /api/ops?action=check` – simple health ping
-- `POST /api/stripe-webhook` – Stripe events (rewrite to `/api/ops?action=stripe-webhook`)
 
 Env vars:
 
@@ -36,24 +37,13 @@ curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandm
   -d '{"thread":{"from":"Donor","summary":"Interested in conservation work","goal":"Secure pledge"}}' -H "Content-Type: application/json"
 ```
 
-### Cloudflare Cron
+## Operations
 
-Example schedules (configure in Cloudflare Dashboard):
+### Cron
 
-```
-# daily digest at 09:00 UTC
-0 9 * * * https://tight-snow-2840.messyandmagnetic.workers.dev/ops/digest
-# weekly land summary every Monday at 08:00 UTC
-0 8 * * 1 https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary
-```
-
-Example curl for /start:
-
-```sh
-curl -X POST 'https://mags-assistant.vercel.app/api/rpa?action=start' \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com"}'
-```
+Cloudflare Worker tasks run on a schedule.
+Endpoints are listed at [/api/cron-urls](https://mags-assistant.vercel.app/api/cron-urls).
+To configure schedules manually, see [ops/cron/README.md](ops/cron/README.md).
 
 ## Scraper
 

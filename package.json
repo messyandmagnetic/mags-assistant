@@ -2,8 +2,9 @@
   "name": "mags-assistant",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=20" },
   "scripts": {
-    "build": "echo \"static + api\"",
+    "build": "echo ok",
     "start": "node server.js || echo \"Using Vercel serverless\"",
     "test": "node -e \"console.log('no tests')\"",
     "trends": "tsx scripts/trends.ts",
@@ -16,7 +17,6 @@
     "@notionhq/client": "^2.2.15",
     "openai": "^4.0.0",
     "stripe": "^14.0.0",
-    "googleapis": "^131.0.0",
-    "raw-body": "^2.5.2"
+    "googleapis": "^131.0.0"
   }
 }

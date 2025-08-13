@@ -3,11 +3,7 @@ import { parse } from 'url';
 import { join, extname } from 'path';
 import { readFile } from 'fs/promises';
 import { existsSync, statSync } from 'fs';
-import { validateEnv } from './api/_lib/env.js';
-
 const publicDir = join(process.cwd(), 'public');
-
-validateEnv();
 
 async function readBody(req) {
   return new Promise((resolve) => {
