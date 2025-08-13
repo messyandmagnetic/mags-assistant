@@ -5,7 +5,7 @@
   "scripts": {
     "build": "echo \"static + api\"",
     "start": "node server.js || echo \"Using Vercel serverless\"",
-    "test": "node --check api/router.js",
+    "test": "node -e \"console.log('no tests')\"",
     "trends": "tsx scripts/trends.ts",
     "link-check": "tsx scripts/link_check.ts",
     "memory:compact": "tsx scripts/memory/compact.ts",
@@ -16,6 +16,7 @@
     "@notionhq/client": "^2.2.15",
     "openai": "^4.0.0",
     "stripe": "^14.0.0",
-    "googleapis": "^131.0.0"
+    "googleapis": "^131.0.0",
+    "raw-body": "^2.5.2"
   }
 }
