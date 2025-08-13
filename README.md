@@ -2,6 +2,13 @@
 
 Production domain: https://mags-assistant.vercel.app
 
+## Vercel
+
+- Node 20 runtime
+- Minimal API: `/api/ping`
+- Add more APIs under `api/` (Hobby plan limit: 12 functions)
+
+
 Test links:
 
 - https://mags-assistant.vercel.app/ — landing page

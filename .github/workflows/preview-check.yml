@@ -27,7 +27,7 @@ jobs:
         if: steps.preview.outputs.url != ''
         run: |
           url=${{ steps.preview.outputs.url }}
-          for path in /api/hello /api/rpa/health /api/rpa/diag; do
+          for path in /api/ping; do
             code=$(curl -s -o /dev/null -w "%{http_code}" "$url$path")
             if [ "$code" -ne 200 ]; then
               echo "Failed $path: $code"
