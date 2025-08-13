@@ -1,6 +1,6 @@
 import { env } from '../../../../lib/env.js';
 
-export const runtime = 'nodejs';
+export const runtime = 'nodejs18.x';
 
 export async function GET() {
   if (!env.TELEGRAM_BOT_TOKEN)

@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import getRawBody from 'raw-body'
 
 export const config = {
+  runtime: 'nodejs18.x',
   api: { bodyParser: false } // needed for Stripe signature verification
 }
 

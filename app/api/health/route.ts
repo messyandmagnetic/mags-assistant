@@ -1,6 +1,6 @@
 import { env } from '../../../lib/env.js';
 
-export const runtime = 'nodejs';
+export const runtime = 'nodejs18.x';
 
 export async function GET() {
   const base = env.GOOGLE_KEY_URL ? env.GOOGLE_KEY_URL.replace(/\/mags-key$/, '') : '';
