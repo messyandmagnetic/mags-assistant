@@ -4,63 +4,70 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>System Check</title>
-  <link rel="stylesheet" href="/brand.css">
+  <link rel="stylesheet" href="/brand.css" />
+  <style>
+    #status div{padding:8px;margin:4px;border:1px solid #ccc}
+    #status div.ok{background:#c7f5d9}
+    #status div.fail{background:#f5c7c7}
+    pre{background:#eee;padding:8px;white-space:pre-wrap}
+  </style>
 </head>
 <body>
   <div class="container">
     <h1>System Check</h1>
-    <div id="cards"></div>
-    <button id="btn-digest">Send test digest</button>
+    <div id="status"></div>
+    <div>
+      <button id="btn-sync">Sync</button>
+      <button id="btn-audit">Audit</button>
+      <button id="btn-ai" style="display:none">AI Draft (dev)</button>
+    </div>
+    <pre id="result"></pre>
   </div>
-<script>
-const CARDS=[
-  {name:'API Health',url:'/api/diag/health'},
-  {name:'Notion',url:'/api/diag/notion'},
-  {name:'Stripe',url:'/api/diag/stripe'},
-  {name:'Gmail',url:'/api/diag/gmail'},
-  {name:'Telegram',url:'/api/diag/telegram'},
-  {name:'Drive',url:'/api/diag/drive'},
-  {name:'Cron',url:'/api/diag/cron'}
-];
-async function run(){
-  const host=document.getElementById('cards');
-  for(const c of CARDS){
-    const div=document.createElement('div');
-    div.className='card';
-    div.textContent=c.name+': checking...';
-    host.appendChild(div);
-    try{
-      const r=await fetch(c.url);
-      const j=await r.json();
-      if(j.ok){
-        div.classList.add('ok');
-        div.textContent=c.name;
-      }else{
-        div.classList.add('fail');
-        div.textContent=c.name+': '+(j.reason||'error');
-        if(j.next_steps&&j.next_steps[0]){
-          const ns=document.createElement('div');
-          ns.className='next';
-          ns.textContent=j.next_steps[0];
-          div.appendChild(ns);
+  <script>
+    const WORKER = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
+    const VERCEL = 'https://mags-assistant.vercel.app';
+    const FETCH_PASS = window.NEXT_PUBLIC_FETCH_PASS || '';
+    const baseHeaders = FETCH_PASS ? { 'X-Fetch-Pass': FETCH_PASS } : {};
+
+    async function check(){
+      const items=[
+        {name:'Vercel',url:`${VERCEL}/api/health`,method:'GET'},
+        {name:'Worker',url:`${WORKER}/health`,method:'GET'},
+        {name:'Scan',url:`${WORKER}/land/scan`,method:'POST'},
+        {name:'Summary',url:`${WORKER}/land/summary`,method:'POST'},
+      ];
+      const host=document.getElementById('status');
+      for(const it of items){
+        const div=document.createElement('div');
+        div.textContent=`${it.name}: …`;
+        host.appendChild(div);
+        try{
+          const r=await fetch(it.url,{method:it.method,headers:{'content-type':'application/json',...baseHeaders},body:it.method==='POST'?"{}":undefined});
+          const j=await r.json();
+          div.textContent=`${it.name}: ${j.ok?'ok':j.error||'fail'}`;
+          div.className=j.ok?'ok':'fail';
+        }catch(e){
+          div.textContent=`${it.name}: error`;
+          div.className='fail';
         }
       }
-    }catch(e){
-      div.classList.add('fail');
-      div.textContent=c.name+': network error';
     }
-  }
-}
-run();
-document.getElementById('btn-digest').addEventListener('click',()=>{
-  fetch('/api/cron/digest?test=true', {method:'POST'});
-});
-</script>
-<style>
-  .card{padding:10px;margin:6px;border:1px solid #ccc;}
-  .card.ok{background:#c7f5d9;}
-  .card.fail{background:#f5c7c7;}
-  .next{font-size:0.9em;margin-top:4px;}
-</style>
+    check();
+
+    async function call(path, payload={}){
+      const res=document.getElementById('result');
+      res.textContent='…';
+      const r=await fetch(WORKER+path,{method:'POST',headers:{'content-type':'application/json',...baseHeaders},body:JSON.stringify(payload)});
+      const j=await r.json();
+      res.textContent=JSON.stringify(j,null,2);
+    }
+
+    document.getElementById('btn-sync').onclick=()=>call('/land/scan');
+    document.getElementById('btn-audit').onclick=()=>call('/land/summary');
+    document.getElementById('btn-ai').onclick=()=>{
+      const sample={thread:{from:'Donor',summary:'Interested in conservation work',goal:'Secure pledge'}};
+      call('/ai/draft-reply',sample);
+    };
+  </script>
 </body>
 </html>

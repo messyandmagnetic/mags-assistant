@@ -15,6 +15,26 @@ Test links:
 - https://mags-assistant.vercel.app/planner — planner page
 - https://mags-assistant.vercel.app/check — system check panel
 
+## Worker testing
+
+```sh
+curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/scan
+curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary
+curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/ai/draft-reply \
+  -d '{"thread":{"from":"Donor","summary":"Interested in conservation work","goal":"Secure pledge"}}' -H "Content-Type: application/json"
+```
+
+### Cloudflare Cron
+
+Example schedules (configure in Cloudflare Dashboard):
+
+```
+# daily digest at 09:00 UTC
+0 9 * * * https://tight-snow-2840.messyandmagnetic.workers.dev/ops/digest
+# weekly land summary every Monday at 08:00 UTC
+0 8 * * 1 https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary
+```
+
 Example curl for /start:
 
 ```sh
