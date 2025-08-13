@@ -1,5 +1,5 @@
 import { Client as NotionClient } from '@notionhq/client';
-import { sendEmail } from '../lib/gmail.ts';
+import { google } from 'googleapis';
 import {
   ensureProfileDb,
   getProfileMap,
@@ -23,10 +23,10 @@ export default {
       return new Response(null, { status: 204, headers: cors });
     }
 
-    // auth gate only for POST if FETCH_PASS is set
-    const requirePass = !!env.FETCH_PASS;
+    // auth gate for all routes when FETCH_PASS is set (unless DEV_MODE)
+    const requirePass = env.FETCH_PASS && env.DEV_MODE !== 'true';
     const pass = request.headers.get('X-Fetch-Pass');
-    if (requirePass && method === 'POST' && pass !== env.FETCH_PASS) {
+    if (requirePass && method !== 'OPTIONS' && pass !== env.FETCH_PASS) {
       return new Response(JSON.stringify({ ok: false, error: 'forbidden' }), {
         status: 401,
         headers: { ...cors, 'Content-Type': 'application/json' }
@@ -39,6 +39,29 @@ export default {
         status,
         headers: { ...cors, 'Content-Type': 'application/json', ...headers }
       });
+
+    const callGemini = async (prompt) => {
+      const key = env.GEMINI_API_KEY;
+      if (!key) return { ok: false, error: 'MISSING_GEMINI_API_KEY' };
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+          {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            }),
+          }
+        );
+        const data = await res.json();
+        const text =
+          data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        return { ok: true, text };
+      } catch (e) {
+        return { ok: false, error: 'GEMINI_ERROR' };
+      }
+    };
 
     // health check
     if (pathname === '/health' && method === 'GET') {
@@ -140,69 +163,189 @@ export default {
     if (pathname === '/api/queue/ack' && method === 'POST') {
       return json({ ok: true });
     }
+    
+    // --- Gemini helpers ---
+    if (pathname === '/ai/draft-reply' && method === 'POST') {
+      const { thread } = await request.json().catch(() => ({}));
+      const prompt = `Draft a friendly 100-150 word email reply.\n${JSON.stringify(thread || {})}`;
+      const r = await callGemini(prompt);
+      if (!r.ok) return json(r, 400);
+      return json({ ok: true, text: r.text });
+    }
 
-    const templates = {
-      financing: `Hello [Name],\nThank you for your willingness to help us secure the Coyote Commons property. We’re pursuing a short-term bridge while philanthropic funds clear. I’m most comfortable handling details by email—could you share the ballpark terms you’d consider (amount, term, interest, collateral)? I’ll reply quickly with any materials you need.\nWarmly,\n[Your Name]`,
-      'donor/grant': `Hi [Name],\nThank you for your interest in Coyote Commons—a regenerative land + community hub. Our donation link is ready for immediate gifts that secure the land. I prefer email, so if you have questions, feel free to reply here and I’ll send the one-page brief and receipt details.\nWith gratitude,\n[Your Name]`,
-      'realtor/seller': `Hi [Name],\nWe’re advancing financing on parallel tracks (bridge + philanthropic) and moving quickly. I prefer email—could you share any timeline updates or active offers so we can align our written offer?\nBest,\n[Your Name]`,
-      'general-info': `Hi [Name],\nHappy to continue via email and provide any details you need about Coyote Commons. Phone if necessary.\nBest,\n[Your Name]`
-    };
+    if (pathname === '/ai/summarize' && method === 'POST') {
+      const { text = '' } = await request.json().catch(() => ({}));
+      const prompt = `Summarize the following text into 3-5 bullet points.\n${text}`;
+      const r = await callGemini(prompt);
+      if (!r.ok) return json(r, 400);
+      return json({ ok: true, text: r.text });
+    }
 
+    // --- Gmail land outreach scan ---
+    if (pathname === '/land/scan' && method === 'POST') {
+      const key =
+        (env.GOOGLE_PRIVATE_KEY_P1 || '') +
+        (env.GOOGLE_PRIVATE_KEY_P2 || '') +
+        (env.GOOGLE_PRIVATE_KEY_P3 || '') +
+        (env.GOOGLE_PRIVATE_KEY_P4 || '');
+      if (!env.GOOGLE_CLIENT_EMAIL || !key) {
+        return json({ ok: false, error: 'MISSING_GOOGLE_CREDS' }, 400);
+      }
+      try {
+        const auth = new google.auth.JWT(env.GOOGLE_CLIENT_EMAIL, undefined, key.replace(/\\n/g, '\n'), [
+          'https://www.googleapis.com/auth/gmail.readonly',
+          'https://www.googleapis.com/auth/gmail.modify',
+        ]);
+        const gmail = google.gmail({ version: 'v1', auth });
+        // ensure label
+        const labelName = 'Land Outreach';
+        const labels = await gmail.users.labels.list({ userId: 'me' });
+        let label = labels.data.labels?.find((l) => l.name === labelName);
+        if (!label) {
+          const created = await gmail.users.labels.create({
+            userId: 'me',
+            requestBody: { name: labelName },
+          });
+          label = created.data;
+        }
+        const labelId = label.id;
+        const terms = ['Laurie','Coyote','land','grant','donor','funding','financing','nonprofit'];
+        const after = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000)
+          .toISOString()
+          .slice(0, 10)
+          .replace(/-/g, '/');
+        const q = `(${terms.join(' OR ')}) after:${after}`;
+        const list = await gmail.users.messages.list({ userId: 'me', q });
+        const msgs = list.data.messages || [];
+        const threadIds = [...new Set(msgs.map((m) => m.threadId))];
+        let count = 0;
+        for (const tid of threadIds) {
+          await gmail.users.threads.modify({
+            userId: 'me',
+            id: tid,
+            requestBody: { addLabelIds: [labelId] },
+          });
+          count++;
+        }
+        return json({ ok: true, count, label: labelName });
+      } catch (e) {
+        return json({ ok: false, error: 'GMAIL_ERROR' }, 500);
+      }
+    }
+
+    // --- Gmail land outreach summary to Notion ---
     if (pathname === '/land/summary' && method === 'POST') {
-      const body = await request.json();
-      const threads = body?.threads || [];
-      let sent = 0;
-      const notion = env.NOTION_TOKEN && env.OUTREACH_DB_ID ? new NotionClient({ auth: env.NOTION_TOKEN }) : null;
-      const shouldSend = env.SEND_AUTOREPLY === true || env.SEND_AUTOREPLY === 'true';
-      for (const t of threads) {
-        const tpl = templates[t.intent];
-        if (!tpl || !shouldSend || !t.email) continue;
-        const text = tpl.replace('[Name]', t.name || 'there').replace('[Your Name]', env.OUTREACH_NAME || 'Maggie');
-        try {
-          await sendEmail({ to: t.email, subject: t.subject || 'Re: Coyote Commons', text });
-          sent++;
-          if (notion && t.id) {
+      const key =
+        (env.GOOGLE_PRIVATE_KEY_P1 || '') +
+        (env.GOOGLE_PRIVATE_KEY_P2 || '') +
+        (env.GOOGLE_PRIVATE_KEY_P3 || '') +
+        (env.GOOGLE_PRIVATE_KEY_P4 || '');
+      if (!env.GOOGLE_CLIENT_EMAIL || !key) {
+        return json({ ok: false, error: 'MISSING_GOOGLE_CREDS' }, 400);
+      }
+      if (!env.NOTION_TOKEN || !env.NOTION_DATABASE_ID) {
+        return json({ ok: false, error: 'MISSING_NOTION_CREDS' }, 400);
+      }
+      try {
+        const auth = new google.auth.JWT(env.GOOGLE_CLIENT_EMAIL, undefined, key.replace(/\\n/g, '\n'), [
+          'https://www.googleapis.com/auth/gmail.readonly',
+          'https://www.googleapis.com/auth/gmail.modify',
+        ]);
+        const gmail = google.gmail({ version: 'v1', auth });
+        const notion = new NotionClient({ auth: env.NOTION_TOKEN });
+        const labelName = 'Land Outreach';
+        const labels = await gmail.users.labels.list({ userId: 'me' });
+        const label = labels.data.labels?.find((l) => l.name === labelName);
+        if (!label) return json({ ok: true, upserts: 0 });
+        const list = await gmail.users.threads.list({
+          userId: 'me',
+          labelIds: [label.id],
+        });
+        const threads = list.data.threads || [];
+        let upserts = 0;
+        const results = [];
+        const parseFrom = (str = '') => {
+          const m = str.match(/^(.*)<(.+)>/);
+          return m ? [m[1].trim(), m[2].trim()] : [str, str];
+        };
+        for (const t of threads) {
+          const thr = await gmail.users.threads.get({ userId: 'me', id: t.id });
+          const messages = thr.data.messages || [];
+          if (messages.length < 2) continue;
+          const first = messages[0];
+          const headers = first.payload?.headers || [];
+          const fromH = headers.find((h) => h.name === 'From')?.value || '';
+          const [fromName, fromEmail] = parseFrom(fromH);
+          const snippet = thr.data.snippet || '';
+          const threadUrl = `https://mail.google.com/mail/u/0/#all/${t.id}`;
+          let suggestedReply = 'Thanks for reaching out about Coyote Commons.';
+          const g = env.GEMINI_API_KEY
+            ? await callGemini(
+                `Draft a short reply to: ${snippet}`
+              )
+            : { ok: false };
+          if (g.ok) suggestedReply = g.text;
+          results.push({
+            from: fromEmail || fromName,
+            date: new Date(parseInt(first.internalDate || '0')).toISOString(),
+            snippet,
+            intent: 'general',
+            suggestedReply,
+          });
+          // upsert into notion
+          const existing = await notion.databases.query({
+            database_id: env.NOTION_DATABASE_ID,
+            filter: { property: 'Thread URL', url: { equals: threadUrl } },
+          });
+          if (existing.results[0]) {
             await notion.pages.update({
-              page_id: t.id,
+              page_id: existing.results[0].id,
               properties: {
-                Status: { select: { name: 'Replied' } },
-                Summary: {
-                  rich_text: [
-                    {
-                      text: { content: `Auto-reply sent @ ${new Date().toISOString().slice(0, 10)}` },
-                    },
-                  ],
+                Summary: { rich_text: [{ text: { content: snippet } }] },
+                'Suggested Reply': {
+                  rich_text: [{ text: { content: suggestedReply } }],
                 },
               },
             });
+          } else {
+            await notion.pages.create({
+              parent: { database_id: env.NOTION_DATABASE_ID },
+              properties: {
+                Contact: { title: [{ text: { content: fromName || fromEmail } }] },
+                Type: { select: { name: 'Other' } },
+                Email: { email: fromEmail || '' },
+                'Thread URL': { url: threadUrl },
+                Summary: { rich_text: [{ text: { content: snippet } }] },
+                'Suggested Reply': {
+                  rich_text: [{ text: { content: suggestedReply } }],
+                },
+                Status: { select: { name: 'New' } },
+              },
+            });
           }
-        } catch (e) {
-          console.warn('sendEmail failed', e);
+          upserts++;
         }
+        return json({ ok: true, upserts, threads: results });
+      } catch (e) {
+        return json({ ok: false, error: 'GMAIL_NOTION_ERROR' }, 500);
       }
-      return json({ ok: true, sent });
     }
 
-    if (pathname === '/land/mark' && method === 'POST') {
-      const { id, threadUrl, status } = await request.json();
-      if (!env.NOTION_TOKEN || !env.OUTREACH_DB_ID) {
-        return json({ ok: false, error: 'missing env' }, 500);
+    // --- Daily ops digest ---
+    if (pathname === '/ops/digest' && method === 'POST') {
+      if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) {
+        return json({ ok: false, error: 'MISSING_TELEGRAM' }, 400);
       }
-      const notion = new NotionClient({ auth: env.NOTION_TOKEN });
-      let pageId = id;
-      if (!pageId && threadUrl) {
-        const res = await notion.databases.query({
-          database_id: env.OUTREACH_DB_ID,
-          filter: { property: 'Thread URL', url: { equals: threadUrl } },
+      try {
+        await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: 'Digest ready.' }),
         });
-        pageId = res.results[0]?.id;
+        return json({ ok: true });
+      } catch (e) {
+        return json({ ok: false, error: 'TELEGRAM_ERROR' }, 500);
       }
-      if (!pageId) return json({ ok: false, error: 'not found' }, 404);
-      await notion.pages.update({
-        page_id: pageId,
-        properties: { Status: { select: { name: status } } },
-      });
-      return json({ ok: true });
     }
 
     if (pathname === '/profile/share' && method === 'GET') {
