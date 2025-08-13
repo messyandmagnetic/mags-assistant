@@ -88,6 +88,22 @@ export default {
         });
       }
 
+      // POST /status/packet
+      if (p === '/status/packet') {
+        const missing: string[] = [];
+        if (!has(env.STRIPE_WEBHOOK_SECRET)) missing.push('MISSING_STRIPE_WEBHOOK_SECRET');
+        if (!has(env.NOTION_TOKEN)) missing.push('MISSING_NOTION_TOKEN');
+        if (!has(env.GOOGLE_CLIENT_EMAIL)) missing.push('MISSING_GOOGLE_CLIENT_EMAIL');
+        if (!has(env.GOOGLE_PRIVATE_KEY_P1)) missing.push('MISSING_GOOGLE_PRIVATE_KEY_P1');
+        if (!has(env.TELEGRAM_BOT_TOKEN)) missing.push('MISSING_TELEGRAM_BOT_TOKEN');
+        if (!has(env.TELEGRAM_CHAT_ID)) missing.push('MISSING_TELEGRAM_CHAT_ID');
+        return ok({
+          now: new Date().toISOString(),
+          service: 'cloudflare-worker',
+          missing,
+        });
+      }
+
       // POST /stripe/audit (no live Stripe calls; echo configured link hints)
       if (p === '/stripe/audit') {
         const links = {

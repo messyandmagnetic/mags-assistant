@@ -38,6 +38,8 @@ curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandm
 
 ### Cloudflare Cron
 
+See [ops/cron.md](ops/cron.md) for worker health and status endpoints.
+
 Example schedules (configure in Cloudflare Dashboard):
 
 ```
