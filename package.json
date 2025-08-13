@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo \"static + api\"",
-    "start": "node server.js || echo \"Using Vercel serverless\"",
+    "build": "echo \"no-op build\"",
+    "start": "node server.js || node index.js || echo \"no server (static)\"",
     "test": "node -e \"console.log('no tests')\"",
     "trends": "tsx scripts/trends.ts",
     "link-check": "tsx scripts/link_check.ts",
@@ -18,5 +18,11 @@
     "stripe": "^14.0.0",
     "googleapis": "^131.0.0",
     "raw-body": "^2.5.2"
+  },
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "devDependencies": {
+    "@vercel/node": "^3.0.0"
   }
 }
