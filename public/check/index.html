@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>System Check</title>
+  <link rel="stylesheet" href="/brand.css" />
+  <style>
+    button{margin:4px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>System Check</h1>
+    <table>
+      <tr><th>Endpoint</th><th>Status</th><th>Action</th></tr>
+      <tr><td>Vercel API</td><td id="vercel-status"></td><td><button id="btn-vercel">Ping</button></td></tr>
+      <tr><td>Worker health</td><td id="worker-health-status"></td><td><button id="btn-worker-health">Ping</button></td></tr>
+      <tr><td>Worker land scan</td><td id="scan-status"></td><td><button id="btn-scan">Sync</button></td></tr>
+      <tr><td>Worker land summary</td><td id="summary-status"></td><td><button id="btn-summary">Audit</button></td></tr>
+    </table>
+  </div>
+  <script>
+    const FETCH_PASS = window.NEXT_PUBLIC_FETCH_PASS;
+    function setStatus(id, ok, msg) {
+      const el = document.getElementById(id);
+      el.textContent = msg || (ok ? 'ok' : 'fail');
+      el.style.color = ok ? 'green' : 'red';
+    }
+    async function ping(id, url) {
+      try {
+        const res = await fetch(url);
+        const js = await res.json();
+        setStatus(id, js.ok);
+      } catch {
+        setStatus(id, false);
+      }
+    }
+    async function workerPost(id, path) {
+      if (!FETCH_PASS) {
+        setStatus(id, false, 'auth header missing; route protected');
+        return;
+      }
+      try {
+        const res = await fetch(`https://tight-snow-2840.messyandmagnetic.workers.dev/${path}`, {
+          method: 'POST',
+          headers: { 'X-Fetch-Pass': FETCH_PASS }
+        });
+        const js = await res.json();
+        setStatus(id, js.ok);
+      } catch {
+        setStatus(id, false);
+      }
+    }
+    document.getElementById('btn-vercel').onclick = () => ping('vercel-status', '/api/ping');
+    document.getElementById('btn-worker-health').onclick = () => ping('worker-health-status', 'https://tight-snow-2840.messyandmagnetic.workers.dev/health');
+    document.getElementById('btn-scan').onclick = () => workerPost('scan-status', 'land/scan');
+    document.getElementById('btn-summary').onclick = () => workerPost('summary-status', 'land/summary');
+    ping('vercel-status', '/api/ping');
+    ping('worker-health-status', 'https://tight-snow-2840.messyandmagnetic.workers.dev/health');
+  </script>
+</body>
+</html>
