@@ -1,920 +1,462 @@
-import {
-  notion,
-  requireEnv,
-  enqueueTask,
-  claimNextTask,
-  completeTask,
-  failTask,
-  queueHealth,
-  readTask,
-  ensureQueueDb,
-  enqueueJob,
-} from '../lib/notion.js';
-import { planFromText } from '../lib/agent/planner.js';
-import { runPlan } from '../lib/agent/executor.js';
+import Stripe from 'stripe';
+import { google } from 'googleapis';
 import { env } from '../lib/env.js';
-import { getProvider, getConfiguredProviders } from '../lib/social/index.js';
-import {
-  addCommand,
-  getCommand,
-  getPending,
-  updateCommand,
-  listCommands,
-  resetRunNow,
-} from '../lib/command-center.js';
-import { runHandler } from '../lib/handlers.js';
-import { getStripe } from '../lib/clients/stripe.js';
-import { getStorage } from '../lib/storage.ts';
-import { spawnSync } from 'child_process';
-import { ensureStripeSchema, backfillDefaults } from '../lib/notion-stripe.js';
-import { createSpreadsheet, addSheet, appendRows, getDrive } from '../lib/google.js';
-import crypto from 'crypto';
-import { log as logEntry } from '../lib/logger.js';
-import { enqueueNewVideos, handleApprove, handleDecline, autoApproveOld } from '../lib/drive-watcher.js';
+import { notion } from '../lib/notion.js';
+import { ensureProfileDb } from '../lib/notion_profile.js';
 
-// guardrail state
-const rateLimit = new Map(); // ip -> {count, ts}
-let paused = env.EXECUTION_PAUSED;
+// Disable body parsing so we can handle raw body for Stripe webhook
+export const config = { api: { bodyParser: false } };
 
-function checkRate(req, limit = 5) {
-  const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'local';
-  const now = Date.now();
-  const entry = rateLimit.get(ip) || { count: 0, ts: now };
-  if (now - entry.ts > 60000) {
-    entry.count = 0;
-    entry.ts = now;
+async function getBody(req) {
+  if (req.body) {
+    // stringified by server.js in dev
+    if (typeof req.body === 'string') {
+      req.rawBody = req.body;
+      try { return JSON.parse(req.body); } catch { return {}; }
+    }
+    req.rawBody = JSON.stringify(req.body);
+    return req.body;
   }
-  entry.count += 1;
-  rateLimit.set(ip, entry);
-  return entry.count <= limit;
-}
-
-function ok(res, data) { res.status(200).json({ ok: true, ...data }); }
-function bad(res, msg, code = 400) { res.status(code).json({ ok: false, error: msg }); }
-
-function checkKey(req) {
-  const k = req.headers['x-mags-key'] || new URL(req.url, 'http://x').searchParams.get('key');
-  return k && env.MAGS_KEY && k === env.MAGS_KEY;
-}
-
-function checkWorker(req) {
-  const k = req.headers['x-worker-key'] || new URL(req.url, 'http://x').searchParams.get('key');
-  return k && env.WORKER_KEY && k === env.WORKER_KEY;
-}
-
-function checkCron(req) {
-  const url = new URL(req.url, 'http://x');
-  const k =
-    req.headers['x-mags-key'] ||
-    url.searchParams.get('key') ||
-    url.searchParams.get('token');
-  if (req.headers['x-vercel-cron']) return true;
-  return k && env.CRON_SECRET && k === env.CRON_SECRET;
-}
-
-async function readJson(req) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(chunk);
+  for await (const c of req) chunks.push(c);
+  const raw = Buffer.concat(chunks).toString();
+  req.rawBody = raw;
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
+function ok(data = {}) { return { status: 200, body: { ok: true, ...data } }; }
+function bad(reason, status = 400, data = {}) { return { status, body: { ok: false, reason, ...data } }; }
+
+// ===== Diag endpoints =====
+export async function diag_health() {
+  return ok({ time: new Date().toISOString() });
+}
+
+export async function diag_notion() {
+  const next_steps = [];
+  if (!env.NOTION_TOKEN) {
+    next_steps.push('Set NOTION_TOKEN');
+    return bad('missing NOTION_TOKEN', 200, { next_steps });
+  }
+  const hq = env.NOTION_HQ_PAGE_ID;
+  if (!hq) {
+    next_steps.push('Set NOTION_HQ_PAGE_ID');
+    return bad('missing NOTION_HQ_PAGE_ID', 200, { next_steps });
+  }
   try {
-    return JSON.parse(Buffer.concat(chunks).toString() || '{}');
-  } catch {
-    return {};
+    const profileDbId = await ensureProfileDb({ notion, hqPageId: hq });
+    let write = true;
+    try {
+      const page = await notion.pages.create({
+        parent: { database_id: profileDbId },
+        properties: {
+          Key: { title: [{ text: { content: 'diag-test' } }] },
+          Value: { rich_text: [{ text: { content: 'temp' } }] },
+        },
+      });
+      await notion.blocks.delete?.({ block_id: page.id }).catch(() =>
+        notion.pages.update({ page_id: page.id, archived: true })
+      );
+    } catch (e) {
+      write = false;
+      next_steps.push(
+        'Open the HQ page in Notion → ••• → Add connections → pick Maggie/Mags Assistant → Can edit. If a “Profile” DB exists, open it → ••• → Add connections → pick Maggie.'
+      );
+    }
+    return ok({ profileDbId, write, next_steps });
+  } catch (e) {
+    return bad(e.message, 200, { next_steps });
   }
 }
 
-async function notify(subject, message) {
+export async function diag_stripe() {
+  const next_steps = [];
+  if (!env.STRIPE_SECRET_KEY) {
+    next_steps.push('Set STRIPE_SECRET_KEY');
+    return bad('missing STRIPE_SECRET_KEY', 200, { next_steps });
+  }
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY);
   try {
-    await fetch(`${process.env.API_BASE ?? ''}/api/notify`, {
+    await stripe.balance.retrieve();
+    await stripe.products.list({ limit: 1 });
+  } catch (e) {
+    return bad(e.message, 200, { next_steps });
+  }
+  const webhookSet = !!env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSet) next_steps.push('Set STRIPE_WEBHOOK_SECRET');
+  return ok({ webhook: webhookSet, next_steps });
+}
+
+export async function diag_telegram(req) {
+  const next_steps = [];
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    next_steps.push('Set TELEGRAM_BOT_TOKEN');
+    return bad('missing TELEGRAM_BOT_TOKEN', 200, { next_steps });
+  }
+  const url = new URL(req.url, 'http://x');
+  const send = url.searchParams.get('send') === 'true';
+  if (send) {
+    if (!env.TELEGRAM_CHAT_ID) {
+      next_steps.push('Set TELEGRAM_CHAT_ID');
+      return bad('missing TELEGRAM_CHAT_ID', 200, { next_steps });
+    }
+    try {
+      await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: 'diag ping' }),
+      });
+    } catch (e) {
+      return bad(e.message, 200, { next_steps });
+    }
+  }
+  return ok({ sent: send });
+}
+
+export async function diag_drive() {
+  const next_steps = [];
+  const email = process.env.GOOGLE_SERVICE_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY;
+  if (!email || !key) {
+    next_steps.push('Set GOOGLE_SERVICE_EMAIL and GOOGLE_PRIVATE_KEY');
+    return bad('missing service account', 200, { next_steps });
+  }
+  try {
+    const auth = new google.auth.JWT(
+      email,
+      null,
+      key,
+      ['https://www.googleapis.com/auth/drive.metadata.readonly']
+    );
+    const drive = google.drive({ version: 'v3', auth });
+    await drive.files.list({ pageSize: 1, fields: 'files(id)' });
+    return ok();
+  } catch (e) {
+    return bad(e.message, 200, { next_steps });
+  }
+}
+
+export async function diag_cron() {
+  const secret = env.CRON_SECRET;
+  const next_steps = [];
+  if (!secret) {
+    next_steps.push('Set CRON_SECRET');
+    return bad('missing CRON_SECRET', 200, { next_steps });
+  }
+  const base = process.env.API_BASE || '';
+  const mk = (p) => `${base}/api/cron/${p}?secret=${secret}`;
+  return ok({
+    urls: {
+      daily: mk('daily'),
+      'stripe-poll': mk('stripe-poll'),
+      'gmail-scan': mk('gmail-scan'),
+    },
+  });
+}
+
+// ===== Stripe =====
+export async function stripe_audit() {
+  const next_steps = [];
+  if (!env.STRIPE_SECRET_KEY) {
+    next_steps.push('Set STRIPE_SECRET_KEY');
+    return bad('missing STRIPE_SECRET_KEY', 200, { next_steps });
+  }
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY);
+  try {
+    await stripe.prices.list({ limit: 1 });
+    return ok();
+  } catch (e) {
+    return bad(e.message, 200, { next_steps });
+  }
+}
+
+export async function stripe_webhook(req) {
+  if (req.method !== 'POST') return bad('method not allowed', 405);
+  const sig = req.headers['stripe-signature'];
+  const secret = env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) return bad('no STRIPE_WEBHOOK_SECRET', 400);
+  const stripe = new Stripe(env.STRIPE_SECRET_KEY || '');
+  let event;
+  try {
+    const raw = req.rawBody || (await getBody(req)) && req.rawBody;
+    event = stripe.webhooks.constructEvent(raw, sig, secret);
+  } catch (e) {
+    return bad(e.message, 400);
+  }
+  switch (event.type) {
+    case 'checkout.session.completed':
+    case 'payment_intent.succeeded':
+      console.log('stripe event', event.type);
+      break;
+    default:
+      break;
+  }
+  return ok();
+}
+
+// ===== Gmail bridge =====
+export async function gmail_scan(body) {
+  const url = process.env.GMAIL_BRIDGE_URL;
+  const secret = process.env.APPS_SCRIPT_SECRET;
+  const next_steps = [];
+  if (!url || !secret) {
+    if (!url) next_steps.push('Set GMAIL_BRIDGE_URL');
+    if (!secret) next_steps.push('Set APPS_SCRIPT_SECRET');
+    return bad('missing bridge config', 200, { next_steps });
+  }
+  try {
+    const r = await fetch(`${url.replace(/\/$/, '')}/scan`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: `${subject}: ${message}` }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body || {}),
     });
-  } catch {}
+    const data = await r.json().catch(() => ({}));
+    return { status: 200, body: { ok: r.ok, data } };
+  } catch (e) {
+    return bad(e.message, 200, { next_steps });
+  }
 }
 
-async function getMasterSheet() {
-  const drive = await getDrive();
-  const q = `name='Master Memory — Messy & Magnetic' and mimeType='application/vnd.google-apps.spreadsheet' and '${env.MM_DRIVE_ROOT_ID}' in parents`;
-  const r = await drive.files.list({ q, fields: 'files(id, webViewLink)' });
-  return r.data.files && r.data.files[0] ? r.data.files[0] : null;
-}
-
-export default async function handler(req, res) {
-  const { method, url } = req;
-  console.log(`${method} ${url}`);
+export async function gmail_nudge(body) {
+  const url = process.env.GMAIL_BRIDGE_URL;
+  const secret = process.env.APPS_SCRIPT_SECRET;
+  const next_steps = [];
+  if (!url || !secret) {
+    if (!url) next_steps.push('Set GMAIL_BRIDGE_URL');
+    if (!secret) next_steps.push('Set APPS_SCRIPT_SECRET');
+    return bad('missing bridge config', 200, { next_steps });
+  }
   try {
-    const { pathname } = new URL(url, `http://${req.headers.host}`);
+    const r = await fetch(`${url.replace(/\/$/, '')}/nudge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body || {}),
+    });
+    const data = await r.json().catch(() => ({}));
+    return { status: 200, body: { ok: r.ok, data } };
+  } catch (e) {
+    return bad(e.message, 200, { next_steps });
+  }
+}
 
-    // dynamic modules for new api routes
-    if (pathname.startsWith('/api/diag/')) {
-      const name = pathname.slice('/api/diag/'.length);
-      try {
-        const mod = await import(`./diag/${name}.js`);
-        await mod.default(req, res);
-      } catch {
-        bad(res, 'Not found', 404);
-      }
-      return;
-    }
+// ===== Cron =====
+function checkCronSecret(req) {
+  const url = new URL(req.url, 'http://x');
+  const secret = url.searchParams.get('secret');
+  return secret && secret === env.CRON_SECRET;
+}
 
-    if (pathname.startsWith('/api/gmail/')) {
-      const name = pathname.slice('/api/gmail/'.length);
-      try {
-        const mod = await import(`./gmail/${name}.js`);
-        await mod.default(req, res);
-      } catch {
-        bad(res, 'Not found', 404);
-      }
-      return;
-    }
+export async function cron_daily(req) {
+  if (!checkCronSecret(req)) return bad('unauthorized', 401);
+  return ok();
+}
 
-    if (pathname.startsWith('/api/stripe/')) {
-      const name = pathname.slice('/api/stripe/'.length);
-      try {
-        const mod = await import(`./stripe/${name}.js`);
-        await mod.default(req, res);
-      } catch {
-        bad(res, 'Not found', 404);
-      }
-      return;
-    }
-
-    if (pathname.startsWith('/api/cron/')) {
-      const name = pathname.slice('/api/cron/'.length);
-      try {
-        const mod = await import(`./cron/${name}.js`);
-        await mod.default(req, res);
-      } catch {
-        bad(res, 'Not found', 404);
-      }
-      return;
-    }
-
-    if (pathname.startsWith('/api/admin/')) {
-      const name = pathname.slice('/api/admin/'.length);
-      try {
-        const mod = await import(`./admin/${name}.js`);
-        await mod.default(req, res);
-      } catch {
-        bad(res, 'Not found', 404);
-      }
-      return;
-    }
-
-    // health / diag
-    if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
-    if (pathname === '/api/health' && method === 'GET') {
-      return res.status(200).json({ ok: true, vercel: 'online' });
-    }
-
-    if (pathname === '/api/diag/notion' && method === 'GET') {
-      if (!env.NOTION_TOKEN) return res.status(200).json({ ok: false, reason: 'missing NOTION_TOKEN' });
-      try {
-        const r = await fetch('https://api.notion.com/v1/users/me', {
-          headers: {
-            Authorization: `Bearer ${env.NOTION_TOKEN}`,
-            'Notion-Version': '2022-06-28',
-          },
-        });
-        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
-      } catch (e) {
-        return res.status(200).json({ ok: false, reason: e.message });
-      }
-    }
-
-    if (pathname === '/api/diag/stripe' && method === 'GET') {
-      if (!env.STRIPE_SECRET_KEY) return res.status(200).json({ ok: false, reason: 'missing STRIPE_SECRET_KEY' });
-      try {
-        const r = await fetch('https://api.stripe.com/v1/balance', {
-          headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
-        });
-        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
-      } catch (e) {
-        return res.status(200).json({ ok: false, reason: e.message });
-      }
-    }
-
-    if (pathname === '/api/diag/telegram' && method === 'GET') {
-      if (!env.TELEGRAM_BOT_TOKEN)
-        return res.status(200).json({ ok: false, reason: 'missing TELEGRAM_BOT_TOKEN' });
-      try {
-        const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
-        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
-      } catch (e) {
-        return res.status(200).json({ ok: false, reason: e.message });
-      }
-    }
-
-    if (pathname === '/api/diag/tally' && method === 'GET') {
-      if (!env.TALLY_API_KEY) return res.status(200).json({ ok: false, reason: 'missing TALLY_API_KEY' });
-      try {
-        const r = await fetch('https://api.tally.so/forms', {
-          headers: { Authorization: `Bearer ${env.TALLY_API_KEY}` },
-        });
-        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
-      } catch (e) {
-        return res.status(200).json({ ok: false, reason: e.message });
-      }
-    }
-
-    if (pathname === '/api/drive/review' && (method === 'GET' || method === 'POST')) {
-      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
-      const discovered = await enqueueNewVideos();
-      await autoApproveOld();
-      return ok(res, { discovered });
-    }
-
-    if (pathname === '/api/approve' && (method === 'POST' || method === 'GET')) {
-      const { searchParams } = new URL(url, `http://${req.headers.host}`);
-      const body = req.body || {};
-      const fileId = body.fileId || searchParams.get('fileId');
-      const token = body.token || searchParams.get('token');
-      try {
-        await handleApprove(fileId, token);
-        return ok(res, { approved: fileId });
-      } catch (err) {
-        return bad(res, err.message || 'error', 400);
-      }
-    }
-
-    if (pathname === '/api/decline' && (method === 'POST' || method === 'GET')) {
-      const { searchParams } = new URL(url, `http://${req.headers.host}`);
-      const body = req.body || {};
-      const fileId = body.fileId || searchParams.get('fileId');
-      const token = body.token || searchParams.get('token');
-      try {
-        await handleDecline(fileId, token);
-        return ok(res, { declined: fileId });
-      } catch (err) {
-        return bad(res, err.message || 'error', 400);
-      }
-    }
-    if (pathname === '/api/rpa/health') {
-      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
-      return ok(res, {});
-    }
-    if (pathname === '/api/rpa/diag') {
-      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
-      return ok(res, {
-        haveKeys: {
-          notion: !!env.NOTION_TOKEN,
-          db: !!env.NOTION_DATABASE_ID,
-          inbox: !!env.NOTION_INBOX_PAGE_ID,
-          hq: !!env.NOTION_HQ_PAGE_ID,
-        },
+export async function cron_digest(req) {
+  if (!checkCronSecret(req)) return bad('unauthorized', 401);
+  const url = new URL(req.url, 'http://x');
+  const test = url.searchParams.get('test') === 'true';
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+    try {
+      await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: `digest${test ? ' test' : ''}` }),
       });
+    } catch {}
+  }
+  return ok();
+}
+
+export async function cron_stripe_poll(req) {
+  if (!checkCronSecret(req)) return bad('unauthorized', 401);
+  return ok();
+}
+
+export async function cron_gmail_scan(req) {
+  if (!checkCronSecret(req)) return bad('unauthorized', 401);
+  return ok();
+}
+
+// ===== Admin =====
+export async function admin_profile(req) {
+  if (req.method !== 'GET') return bad('method not allowed', 405);
+  if (!env.NOTION_TOKEN) return bad('missing NOTION_TOKEN', 200);
+  const hq = env.NOTION_HQ_PAGE_ID;
+  if (!hq) return bad('missing NOTION_HQ_PAGE_ID', 200);
+  try {
+    const dbId = await ensureProfileDb({ notion, hqPageId: hq });
+    const r = await notion.databases.query({ database_id: dbId, page_size: 100 });
+    const items = r.results.map((p) => {
+      const props = p.properties || {};
+      return {
+        id: p.id,
+        key: props.Key?.title?.[0]?.plain_text || '',
+        value: props.Value?.rich_text?.[0]?.plain_text || '',
+        visibility: props.Visibility?.select?.name || '',
+      };
+    });
+    return ok({ items });
+  } catch (e) {
+    return bad(e.message, 200);
+  }
+}
+
+// ===== Telegram command helpers =====
+async function sendTelegram(text) {
+  if (!env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID) return;
+  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text }),
+  });
+}
+
+function parseIntent(text = '') {
+  const t = text.toLowerCase();
+  if (t.includes('run prospecting')) return 'run_prospecting';
+  if (t.includes('gmail scan') || t.startsWith('/scan')) return 'gmail_scan';
+  if (t.includes('stripe audit')) return 'stripe_audit';
+  if (t.includes('send digest') || t.startsWith('/digest')) return 'send_digest';
+  if (t.startsWith('/status') || t.includes('status')) return 'status';
+  if (t.startsWith('/pause') || t.includes('pause')) return 'pause';
+  if (t.startsWith('/resume') || t.includes('resume')) return 'resume';
+  return 'free';
+}
+
+async function handleIntent(intent) {
+  switch (intent) {
+    case 'gmail_scan':
+      return gmail_scan();
+    case 'stripe_audit':
+      return stripe_audit();
+    case 'send_digest':
+      return cron_digest({ url: '/api/router?action=cron_digest' });
+    case 'status':
+      return ok({ message: `${process.env.API_BASE || ''}/check` });
+    case 'pause':
+    case 'resume':
+      return ok({ message: intent });
+    default:
+      return ok({ message: 'noted' });
+  }
+}
+
+export async function telegram_command(req) {
+  const body = await getBody(req);
+  const text = body.text || '';
+  const intent = parseIntent(text);
+  const result = await handleIntent(intent);
+  await sendTelegram(`command: ${intent}`);
+  return result;
+}
+
+export async function telegram_webhook(req) {
+  const body = await getBody(req);
+  const msg = body.message;
+  if (msg && String(msg.chat?.id) === String(env.TELEGRAM_CHAT_ID)) {
+    const text = msg.text || '';
+    const intent = parseIntent(text);
+    const result = await handleIntent(intent);
+    await sendTelegram(`command: ${intent}`);
+    return result;
+  }
+  return ok();
+}
+
+export async function telegram_poll(req) {
+  const url = new URL(req.url, 'http://x');
+  const secret = url.searchParams.get('secret');
+  if (secret !== env.CRON_SECRET) return bad('unauthorized', 401);
+  if (!env.TELEGRAM_BOT_TOKEN) return bad('missing TELEGRAM_BOT_TOKEN', 200);
+  const updates = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getUpdates`).then(r => r.json()).catch(() => ({result:[]}));
+  for (const u of updates.result || []) {
+    const msg = u.message;
+    if (msg && String(msg.chat?.id) === String(env.TELEGRAM_CHAT_ID)) {
+      const intent = parseIntent(msg.text || '');
+      await handleIntent(intent);
+      await sendTelegram(`command: ${intent}`);
     }
+  }
+  return ok();
+}
 
-    if (pathname === '/api/env/summary') {
-      return ok(res, {
-        haveKeys: {
-          notion: !!env.NOTION_TOKEN,
-          db: !!env.NOTION_DATABASE_ID,
-          inbox: !!env.NOTION_INBOX_PAGE_ID,
-          hq: !!env.NOTION_HQ_PAGE_ID,
-        },
-      });
+// ===== Main router =====
+export default async function handler(req, res) {
+  const url = new URL(req.url, 'http://x');
+  let action = url.searchParams.get('action');
+  const parts = url.pathname.split('/');
+  if (!action && parts.length > 3) action = parts[3]; // /api/router/:action
+
+  let result;
+  try {
+    switch (action) {
+      case 'diag_health':
+        result = await diag_health();
+        break;
+      case 'diag_notion':
+        result = await diag_notion();
+        break;
+      case 'diag_stripe':
+        result = await diag_stripe();
+        break;
+      case 'diag_telegram':
+        result = await diag_telegram(req);
+        break;
+      case 'diag_drive':
+        result = await diag_drive();
+        break;
+      case 'diag_cron':
+        result = await diag_cron();
+        break;
+      case 'stripe_audit':
+        result = await stripe_audit();
+        break;
+      case 'stripe_webhook':
+        result = await stripe_webhook(req);
+        break;
+      case 'gmail_scan':
+        result = await gmail_scan(await getBody(req));
+        break;
+      case 'gmail_nudge':
+        result = await gmail_nudge(await getBody(req));
+        break;
+      case 'cron_daily':
+        result = await cron_daily(req);
+        break;
+      case 'cron_digest':
+        result = await cron_digest(req);
+        break;
+      case 'cron_stripe_poll':
+        result = await cron_stripe_poll(req);
+        break;
+      case 'cron_gmail_scan':
+        result = await cron_gmail_scan(req);
+        break;
+      case 'admin_profile':
+        result = await admin_profile(req);
+        break;
+      case 'telegram_command':
+        result = await telegram_command(req);
+        break;
+      case 'telegram_webhook':
+        result = await telegram_webhook(req);
+        break;
+      case 'telegram_poll':
+        result = await telegram_poll(req);
+        break;
+      default:
+        result = bad('not found', 404);
     }
-
-    // ===== Bootstrap: create Master Memory sheet =====
-    if (pathname === '/api/bootstrap' && method === 'POST') {
-      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
-      const title = 'Master Memory — Messy & Magnetic';
-      const existing = await getMasterSheet();
-      if (existing) return ok(res, existing);
-      const { id, webViewLink } = await createSpreadsheet(title, env.MM_DRIVE_ROOT_ID);
-      const tabs = [
-        'Personal Bio & Preferences',
-        'Business & Brand',
-        'Retreat & Land Vision',
-        'Social Strategy',
-        'Automation & Tools',
-        'Key Ongoing Goals',
-        'To Remove / Outdated',
-        'Backups_Index',
-      ];
-      for (const t of tabs) {
-        const headers = t === 'Backups_Index' ? [] : ['Category', 'Detail', 'Last Updated'];
-        await addSheet(id, t, headers);
-      }
-      const seeds = [
-        ['Tone', 'Messy & Magnetic', new Date().toISOString()],
-        ['Style', 'Authentic & Casual', new Date().toISOString()],
-      ];
-      await appendRows(id, `${tabs[0]}!A2:C`, seeds);
-      return ok(res, { id, url: webViewLink });
-    }
-
-    // ===== Tally webhook =====
-    if ((pathname === '/api/tally' || pathname === '/api/tally/webhook') && method === 'POST') {
-      const sig = req.headers['tally-webhook-secret'] || req.headers['tally-webhook-secret'];
-      if (env.TALLY_WEBHOOK_SECRET && sig !== env.TALLY_WEBHOOK_SECRET) {
-        return bad(res, 'Unauthorized', 401);
-      }
-      const body = typeof req.body === 'object' ? req.body : await readJson(req);
-      try {
-        await fetch(`${env.API_BASE}/agent/tally/ingest`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(env.FETCH_PASS ? { 'X-Fetch-Pass': env.FETCH_PASS } : {}),
-          },
-          body: JSON.stringify(body),
-        });
-      } catch (err) {
-        return bad(res, 'worker error', 500);
-      }
-      return ok(res, { received: true });
-    }
-
-    if (pathname === '/api/stripe' && method === 'POST') {
-      const sig = req.headers['stripe-signature'];
-      const raw = req.rawBody || JSON.stringify(req.body || {});
-      try {
-        if (env.STRIPE_WEBHOOK_SECRET) {
-          const stripe = getStripe();
-          const event = stripe.webhooks.constructEvent(raw, sig, env.STRIPE_WEBHOOK_SECRET);
-          return ok(res, { type: event.type });
-        }
-      } catch (err) {
-        return bad(res, 'Invalid signature', 400);
-      }
-      let evt = {};
-      try { evt = JSON.parse(raw); } catch {}
-      return ok(res, { type: evt['type'] });
-    }
-
-    // ===== Stripe webhook =====
-    if ((pathname === '/api/stripe/webhook' || pathname === '/api/stripe-webhook') && method === 'POST') {
-      const secret = env.STRIPE_WEBHOOK_SECRET;
-      if (!secret) return bad(res, 'Missing STRIPE_WEBHOOK_SECRET', 500);
-      const stripe = getStripe();
-      const sig = req.headers['stripe-signature'];
-      let event;
-      try {
-        event = stripe.webhooks.constructEvent(req.rawBody, sig, secret);
-      } catch (err) {
-        console.error('stripe webhook verify failed', err);
-        return bad(res, 'Invalid signature', 400);
-      }
-      await logEntry('stripe', 'event', { type: event.type, id: event.id });
-      const sheet = await getMasterSheet();
-      if (sheet) {
-        try {
-          await addSheet(sheet.id, 'Stripe Events', ['Timestamp', 'Type', 'ID']);
-        } catch {}
-        await appendRows(sheet.id, 'Stripe Events!A:C', [[new Date().toISOString(), event.type, event.id]]);
-      }
-      return ok(res, { received: true });
-    }
-
-    // ===== Telegram webhook =====
-    if ((pathname === '/api/telegram' || pathname === '/api/telegram/webhook') && method === 'POST') {
-      const token = env.TELEGRAM_BOT_TOKEN;
-      if (!token) return bad(res, 'No TELEGRAM_BOT_TOKEN', 501);
-      const update = typeof req.body === 'object' ? req.body : await readJson(req);
-      const chatId = update?.message?.chat?.id || env.TELEGRAM_CHAT_ID;
-      const text = (update?.message?.text || '').trim();
-      await logEntry('telegram', 'incoming', { text });
-      let reply = null;
-      if (text === '/ping') reply = 'pong ✅';
-      if (text === '/status') reply = 'ok';
-      if (text === '/links') {
-        reply = [
-          env.NEXT_PUBLIC_SITE_URL || 'https://assistant.messyandmagnetic.com',
-          env.MASTER_MEMORY_SHEET_ID || 'memory sheet n/a',
-          env.NOTION_HQ_PAGE_ID ? `https://notion.so/${env.NOTION_HQ_PAGE_ID}` : 'notion n/a',
-        ].join('\n');
-      }
-      if (text === '/pricecheck') reply = 'price audit not implemented';
-      if (!reply && /quiz|blueprint|email|pdf/i.test(text)) reply = 'job queued';
-      if (reply && chatId) {
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: reply }),
-        });
-      }
-      return ok(res, { received: true });
-    }
-
-    if (pathname === '/api/diag/media' && method === 'GET') {
-      const ff = spawnSync('ffmpeg', ['-version']);
-      const storage = getStorage();
-      let storageOk = false;
-      try {
-        await storage.put(Buffer.from('ok'), 'diag/test.txt');
-        storageOk = await storage.exists('diag/test.txt');
-      } catch {}
-      return ok(res, { ffmpeg: ff.status === 0, storage: storageOk });
-    }
-
-    // ===== Commands: run =====
-    if (pathname === '/api/commands/run' && method === 'POST') {
-      if (!checkRate(req)) return bad(res, 'Rate limit', 429);
-      const body =
-        req.body && typeof req.body === 'object' ? req.body : await readJson(req);
-      let cmd;
-      if (body.id) {
-        cmd = getCommand(body.id);
-        if (!cmd) return bad(res, 'Not found', 404);
-      } else {
-        cmd = addCommand(body.command || '', body.args || '');
-      }
-      try {
-        updateCommand(cmd.id, { status: 'Running' });
-        const result = await runHandler(cmd.command, cmd.args);
-        updateCommand(cmd.id, {
-          status: 'Succeeded',
-          output: result,
-          runNow: false,
-        });
-        return ok(res, { id: cmd.id, status: 'Succeeded', result });
-      } catch (e) {
-        updateCommand(cmd.id, {
-          status: 'Failed',
-          output: e.message,
-          runNow: false,
-        });
-        return bad(res, e.message || 'Error', 500);
-      }
-    }
-
-    // ===== Commands: logs =====
-    if (pathname === '/api/commands/logs' && method === 'GET') {
-      const logs = listCommands().slice(-10).reverse();
-      return ok(res, { logs });
-    }
-
-    // ===== Commands: scan =====
-    if (pathname === '/api/commands/scan' && method === 'POST') {
-      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
-      if (paused) return ok(res, { paused: true });
-      const pending = getPending();
-      const results = [];
-      for (const cmd of pending) {
-        try {
-          updateCommand(cmd.id, { status: 'Running' });
-          const r = await runHandler(cmd.command, cmd.args);
-          updateCommand(cmd.id, { status: 'Succeeded', output: r });
-          resetRunNow(cmd.id);
-          results.push({ id: cmd.id, ok: true });
-        } catch (e) {
-          updateCommand(cmd.id, { status: 'Failed', output: e.message });
-          resetRunNow(cmd.id);
-          results.push({ id: cmd.id, ok: false, error: e.message });
-        }
-      }
-      return ok(res, { count: results.length, results });
-    }
-
-    // ===== Commands: pause/resume =====
-    if (pathname === '/api/commands/pause' && method === 'POST') {
-      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
-      paused = true;
-      return ok(res, { paused: true });
-    }
-    if (pathname === '/api/commands/resume' && method === 'POST') {
-      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
-      paused = false;
-      return ok(res, { paused: false });
-    }
-
-    // existing rpa/start endpoint
-    if (pathname === '/api/rpa/start') {
-      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
-      if (method === 'POST') {
-        const body = req.body && typeof req.body === 'object' ? req.body : {};
-        const target = typeof body.url === 'string' ? body.url.trim() : '';
-        try {
-          if (!target) throw new Error('missing');
-          new URL(target);
-        } catch {
-          return bad(res, "'url' is required");
-        }
-        if (env.BROWSERLESS_API_KEY) {
-          // await fetch(...)
-        }
-        return ok(res, {
-          started: true,
-          url: target,
-          jobId: Math.random().toString(36).slice(2, 8),
-        });
-      }
-      return bad(res, 'Method not allowed', 405);
-    }
-
-    // ===== Queue: enqueue =====
-    if (pathname === '/api/queue/enqueue' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
-      const data = await readJson(req).catch(() => ({}));
-      const payload = data.payload ? data.payload : data;
-      const jobId = `job_${Date.now()}`;
-      const page = await enqueueTask({ jobId, payload });
-      return ok(res, { id: jobId, pageId: page?.id ?? null });
-    }
-
-    // ===== Queue: seed job queue =====
-    if (pathname === '/api/queue/seed' && method === 'POST') {
-      if (req.headers['x-mags-key'] !== env.CRON_SECRET)
-        return bad(res, 'Unauthorized', 401);
-      const parentPageId = env.NOTION_HQ_PAGE_ID;
-      if (!parentPageId) return bad(res, 'Missing NOTION_HQ_PAGE_ID');
-      const { databaseId } = await ensureQueueDb({ parentPageId });
-
-      if (!env.NOTION_QUEUE_DB) {
-        try {
-          if (process.env.VERCEL_PROJECT_ID && process.env.VERCEL_API_TOKEN) {
-            await fetch(
-              `https://api.vercel.com/v9/projects/${process.env.VERCEL_PROJECT_ID}/env`,
-              {
-                method: 'POST',
-                headers: {
-                  Authorization: `Bearer ${process.env.VERCEL_API_TOKEN}`,
-                  'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                  key: 'NOTION_QUEUE_DB',
-                  value: databaseId,
-                  target: ['production', 'preview', 'development'],
-                }),
-              }
-            );
-          }
-          process.env.NOTION_QUEUE_DB = databaseId;
-        } catch (e) {
-          console.error('Failed to set Vercel env', e);
-        }
-      }
-
-      const parameters = `Update all Stripe product images and advanced settings to the final Messy & Magnetic branding.
-
-Tasks:
-1) Fix incomplete descriptions using “MM Site Content” in Notion.
-2) Upload final product images from the brand folder.
-3) Ensure advanced settings are correct for each product (metadata keys, unit label, tax behavior, shippable flags if any, statement descriptor where needed).
-4) Set up donation products and link to correct price IDs (one‑time + monthly).
-5) Normalize naming, descriptions, and visibility to match the approved product templates in Notion.
-Output:
-- List of product IDs updated
-- Any products skipped with reason
-- Links to new images
-`;
-
-      const { id: jobId } = await enqueueJob({
-        databaseId,
-        name: 'Update Stripe Products & Donations',
-        parameters,
-      });
-
-      return ok(res, { databaseId, jobId });
-    }
-
-    // ===== Queue: claim =====
-    if (pathname === '/api/queue/claim' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      if (!env.NOTION_QUEUE_DB_ID) return bad(res, 'Missing NOTION_QUEUE_DB_ID');
-      const page = await claimNextTask();
-      if (!page) return ok(res, { id: null });
-      return ok(res, readTask(page));
-    }
-
-    // ===== Queue: complete =====
-    if (pathname === '/api/queue/complete' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      if (!body.id) return bad(res, 'Missing id');
-      await completeTask(body.id);
-      return ok(res, { id: body.id });
-    }
-
-    // ===== Queue: fail =====
-    if (pathname === '/api/queue/fail' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      if (!body.id) return bad(res, 'Missing id');
-      await failTask(body.id, body.error || 'error');
-      return ok(res, { id: body.id });
-    }
-
-    // ===== Queue: health =====
-    if (pathname === '/api/queue/health' && method === 'GET') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      await queueHealth();
-      return ok(res, {});
-    }
-
-    // ===== Run job =====
-    if (pathname === '/api/run' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const { id, task, type = 'ops', data } = body;
-      if (!id) return bad(res, 'Missing id');
-      try {
-        switch (type) {
-          case 'social-post':
-            console.log('social-post', task, data);
-            break;
-          case 'notion-maint':
-          case 'sync':
-          case 'crawl':
-          case 'plan':
-          case 'ops':
-          default:
-            console.log('run', type, task);
-            break;
-        }
-        await completeTask(id);
-        return ok(res, { id });
-      } catch (err) {
-        await failTask(id, err?.message || String(err));
-        return bad(res, err?.message || 'run failed', 500);
-      }
-    }
-
-    // secure endpoints
-    if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
-
-    // ===== Donations: create $250 link =====
-    if (pathname === '/api/donations/create' && method === 'POST') {
-      try {
-        const body =
-          typeof req.body === 'object' ? req.body : await readJson(req);
-        const stripe = getStripe();
-        let product;
-        try {
-          const search = await stripe.products.search({
-            query: "name:'Nonprofit Filing Support'",
-          });
-          product = search.data[0];
-        } catch {}
-        if (!product) {
-          product = await stripe.products.create({
-            name: 'Nonprofit Filing Support',
-          });
-        }
-        const price = await stripe.prices.create({
-          unit_amount: 25000,
-          currency: 'usd',
-          product: product.id,
-        });
-        const link = await stripe.paymentLinks.create({
-          line_items: [{ price: price.id, quantity: 1 }],
-        });
-        if (body?.crmId) {
-          try {
-            await notion.pages.update({
-              page_id: body.crmId,
-              properties: { 'Stripe Link': { url: link.url } },
-            });
-          } catch (e) {
-            console.error('crm update failed', e);
-          }
-        }
-        await notify('Donation link created', link.url);
-        return ok(res, {
-          link: link.url,
-          priceId: price.id,
-          productId: product.id,
-        });
-      } catch (e) {
-        return bad(res, e?.message || 'Error creating link', 500);
-      }
-    }
-
-    // ===== Agent: plan from text =====
-    if (pathname === '/api/agent/plan' && method === 'POST') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const { text } = body;
-      if (!text) return bad(res, 'Missing text');
-      const plan = planFromText(text);
-      return ok(res, { plan });
-    }
-
-    // ===== Agent: command from text =====
-    if (pathname === '/api/agent/command' && method === 'POST') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const { text } = body;
-      if (!text) return bad(res, 'Missing text');
-      const plan = planFromText(text);
-      const { runId } = await runPlan(plan, { text });
-      return ok(res, { jobId: runId });
-    }
-
-    // ===== Agent: run explicit plan =====
-    if (pathname === '/api/agent/run' && method === 'POST') {
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const { plan, text = '' } = body;
-      if (!plan) return bad(res, 'Missing plan');
-      const { runId } = await runPlan(plan, { text });
-      return ok(res, { jobId: runId });
-    }
-
-    // ===== Agent: list jobs =====
-    if (pathname === '/api/agent/jobs' && method === 'GET') {
-      const db = requireEnv('NOTION_DB_RUNS_ID');
-      const r = await notion.databases.query({ database_id: db, page_size: 20, sorts: [{ property: 'Started', direction: 'descending' }] });
-      return ok(res, { results: r.results });
-    }
-
-    // ===== Agent: logs =====
-    if (pathname === '/api/agent/logs' && method === 'GET') {
-      const id = new URL(req.url, 'http://x').searchParams.get('id');
-      if (!id) return bad(res, 'Missing id');
-      const page = await notion.pages.retrieve({ page_id: id });
-      const result = page.properties?.Result?.rich_text?.map(r => r.plain_text).join('\n') || '';
-      return ok(res, { result });
-    }
-
-    // ===== Stripe sync stub =====
-    if (pathname === '/api/stripe/sync' && method === 'POST') {
-      return ok(res, { synced: false, message: 'Not implemented' });
-    }
-
-    // ===== HQ: list children =====
-    if (pathname.startsWith('/api/notion/hq/children') && method === 'GET') {
-      const pageId = requireEnv('NOTION_HQ_PAGE_ID');
-      const r = await notion.blocks.children.list({ block_id: pageId, page_size: 100 });
-      return ok(res, { results: r.results });
-    }
-
-    // ===== HQ: create subpage =====
-    if (pathname.startsWith('/api/notion/hq/subpage') && method === 'POST') {
-      const pageId = requireEnv('NOTION_HQ_PAGE_ID');
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const title = body.title || 'New Subpage';
-      const page = await notion.pages.create({
-        parent: { page_id: pageId },
-        properties: { title: [{ type: 'text', text: { content: title } }] },
-      });
-      return ok(res, { id: page.id, title });
-    }
-
-    // ===== HQ: append note =====
-    if (pathname.startsWith('/api/notion/hq/note') && method === 'POST') {
-      const pageId = requireEnv('NOTION_HQ_PAGE_ID');
-      const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-      const text = body.text || 'Note from Mags';
-      await notion.blocks.children.append({
-        block_id: pageId,
-        children: [
-          {
-            paragraph: {
-              rich_text: [{ type: 'text', text: { content: text } }],
-            },
-          },
-        ],
-      });
-      return ok(res, { appended: true });
-    }
-
-    // ===== Notion: ensure Stripe schema =====
-    if (pathname === '/api/notion/ensure-stripe-schema' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const r = await ensureStripeSchema();
-      return ok(res, r);
-    }
-
-    // ===== Notion: backfill defaults =====
-    if (pathname === '/api/notion/backfill-defaults' && method === 'POST') {
-      if (!checkWorker(req)) return bad(res, 'Unauthorized', 401);
-      const r = await backfillDefaults();
-      return ok(res, r);
-    }
-
-    // ===== Notion: Tasks (database) =====
-    if (pathname.startsWith('/api/notion/tasks')) {
-      const databaseId = requireEnv('NOTION_DATABASE_ID');
-
-      if (method === 'GET') {
-        const r = await notion.databases.query({
-          database_id: databaseId,
-          page_size: 50,
-          sorts: [{ property: 'Created', direction: 'descending' }].filter(Boolean),
-        });
-        return ok(res, { count: r.results.length, results: r.results });
-      }
-
-      if (method === 'POST') {
-        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { title, status = 'Todo', notes = '' } = body;
-        if (!title) return bad(res, 'Missing title');
-        const props = {
-          Name: { title: [{ text: { content: title } }] },
-        };
-        if (notes) props['Notes'] = { rich_text: [{ text: { content: notes } }] };
-        if (status) props['Status'] = { status: { name: status } };
-        const page = await notion.pages.create({
-          parent: { database_id: databaseId },
-          properties: props,
-        });
-        return ok(res, { id: page.id });
-      }
-
-      if (method === 'PATCH') {
-        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { id, status, title, notes } = body;
-        if (!id) return bad(res, 'Missing id');
-        const props = {};
-        if (title) props['Name'] = { title: [{ text: { content: title } }] };
-        if (status) props['Status'] = { status: { name: status } };
-        if (notes !== undefined) props['Notes'] = { rich_text: [{ text: { content: notes } }] };
-        await notion.pages.update({ page_id: id, properties: props });
-        return ok(res, { id });
-      }
-
-      return bad(res, 'Method not allowed', 405);
-    }
-
-    // ===== Notion: Inbox notes (page) =====
-    if (pathname.startsWith('/api/notion/notes')) {
-      const pageId = env.NOTION_INBOX_PAGE_ID;
-      if (!pageId) return bad(res, 'No NOTION_INBOX_PAGE_ID set', 501);
-
-      if (method === 'POST') {
-        const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
-        const { text } = body;
-        if (!text) return bad(res, 'Missing text');
-        await notion.blocks.children.append({
-          block_id: pageId,
-          children: [
-            {
-              paragraph: {
-                rich_text: [{ type: 'text', text: { content: text } }],
-              },
-            },
-          ],
-        });
-        return ok(res, { appended: true });
-      }
-
-      return bad(res, 'Method not allowed', 405);
-    }
-
-    // ===== Social: diag =====
-    if (pathname === '/api/social/diag' && method === 'GET') {
-      if (!checkKey(req)) return bad(res, 'Unauthorized', 401);
-      return ok(res, { providers: getConfiguredProviders() });
-    }
-
-    // ===== Social: run due =====
-    if (pathname === '/api/social/run-due' && method === 'POST') {
-      if (!checkCron(req)) return bad(res, 'Unauthorized', 401);
-      const databaseId = env.NOTION_SOCIAL_DB;
-      if (!databaseId) return bad(res, 'No NOTION_SOCIAL_DB set', 501);
-      const now = new Date().toISOString();
-      const r = await notion.databases.query({
-        database_id: databaseId,
-        filter: {
-          and: [
-            { property: 'Status', status: { equals: 'Scheduled' } },
-            { property: 'Scheduled At', date: { on_or_before: now } },
-          ],
-        },
-        page_size: 25,
-      });
-      const results = [];
-      for (const page of r.results) {
-        const props = page.properties || {};
-        const platform = props['Platform']?.select?.name;
-        const caption = (props['Caption']?.rich_text || [])
-          .map((t) => t.plain_text)
-          .join('');
-        const linkUrl = props['LinkURL']?.url || '';
-        const mediaUrl = props['AssetURL']?.url || '';
-        const postFn = getProvider(platform);
-        let okPost = false;
-        let response = 'no provider';
-        try {
-          if (postFn) {
-            response = await postFn({ caption, mediaUrl, linkUrl });
-            okPost = response !== 'not configured';
-          }
-        } catch (e) {
-          response = e.message || String(e);
-        }
-        await notion.pages.update({
-          page_id: page.id,
-          properties: {
-            Status: { status: { name: okPost ? 'Posted' : 'Failed' } },
-            ResultLog: {
-              rich_text: [{ text: { content: String(response).slice(0, 2000) } }],
-            },
-          },
-        });
-        await notify(
-          `${platform} ${okPost ? 'posted' : 'failed'}`,
-          String(response)
-        );
-        results.push({ id: page.id, ok: okPost, response });
-      }
-      return ok(res, { count: results.length, results });
-    }
-
-    return bad(res, 'Not found', 404);
   } catch (e) {
     console.error(e);
-    return bad(res, e.message || 'Server error', 500);
+    result = bad(e.message || 'server error', 500);
   }
+  res.status(result.status).json(result.body);
 }
+
