@@ -18,23 +18,37 @@ Test links:
 ## API map
 
 - `POST /api/ops?action=status` – list present env vars
-- `POST /api/ops?action=check` – simple health ping
-- `POST /api/stripe-webhook` – Stripe events (rewrite to `/api/ops?action=stripe-webhook`)
+- `GET /api/ping` – simple health ping
+- `POST /api/ops?action=check` – legacy health ping
+- `POST /api/ops?action=stripe-webhook` – Stripe events
 
 Env vars:
 
-- `STRIPE_SECRET_KEY`
+- `NEXT_PUBLIC_FETCH_PASS` (optional; matches Worker FETCH_PASS)
 - `STRIPE_WEBHOOK_SECRET`
-- `NEXT_PUBLIC_FETCH_PASS` (optional)
+- `STRIPE_SECRET_KEY` (optional)
+- `NOTION_TOKEN` (optional)
+- `NOTION_DATABASE_ID` (optional)
+- `NOTION_HQ_PAGE_ID` (optional)
+- Gmail service account or OAuth tokens (optional)
+- `TELEGRAM_BOT_TOKEN` (optional)
+- `TELEGRAM_CHAT_ID` (optional)
 
-## Worker testing
+## Testing
+
+Open `/check` for a simple UI or run the cURLs below:
 
 ```sh
-curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/scan
-curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary
-curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/ai/draft-reply \
-  -d '{"thread":{"from":"Donor","summary":"Interested in conservation work","goal":"Secure pledge"}}' -H "Content-Type: application/json"
+# Vercel
+curl -s https://<preview-domain>/api/ping
+
+# Worker
+curl -s https://tight-snow-2840.messyandmagnetic.workers.dev/health
+curl -s -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/scan
+curl -s -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary
 ```
+
+Acceptance: Vercel preview builds green, `/api/ping` responds with `{ok:true}`, and `/check` shows green for Vercel and Worker `/health` while the Worker POSTs report counts or a clear auth error.
 
 ### Cloudflare Cron
 
