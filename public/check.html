@@ -6,48 +6,55 @@
   <title>System Check</title>
   <link rel="stylesheet" href="/brand.css" />
   <style>
+    table { border-collapse: collapse; margin-top:1rem }
+    th, td { border:1px solid #ccc; padding:4px 8px }
     button{margin:4px}
   </style>
-</head>
-<body>
-  <div class="container">
-    <h1>System Check</h1>
-    <div>
-      <button id="btn-health">Vercel API</button>
-      <span id="health-status"></span>
-    </div>
-    <div>
-      <button id="btn-worker">Worker</button>
-      <span id="worker-status"></span>
-    </div>
-  </div>
   <script>
-    async function ping(id, url) {
+    const WORKER = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
+    const PASS = window.NEXT_PUBLIC_FETCH_PASS || '';
+    function passHeaders(){ return PASS ? { 'X-Fetch-Pass': PASS } : {}; }
+    async function check(id, url, opt={}) {
       const el = document.getElementById(id);
       try {
-        const res = await fetch(url, { method: 'POST' });
-        const js = await res.json();
-        el.textContent = (js.ok ? 'ok' : 'fail');
-        el.style.color = js.ok ? 'green' : 'red';
+        const res = await fetch(url, opt);
+        const ok = res.ok;
+        el.textContent = ok ? 'ok' : 'fail';
+        el.style.color = ok ? 'green' : 'red';
       } catch (e) {
         el.textContent = 'fail';
         el.style.color = 'red';
       }
     }
-
-    // Example bindings
-    // Health of Vercel API
-    document.getElementById('btn-health').onclick = () =>
-      ping('health-status', '/api/ops?action=check');
-
-    // Cloudflare Worker health (GET ok)
-    document.getElementById('btn-worker').onclick = () =>
-      fetch('https://tight-snow-2840.messyandmagnetic.workers.dev/health')
-        .then(r => r.ok ? 'ok' : 'fail')
-        .then(s => {
-          const el = document.getElementById('worker-status');
-          el.textContent = s; el.style.color = (s === 'ok' ? 'green' : 'red');
-        });
+    function runChecks(){
+      check('vercel','/api/ping');
+      check('w-health',`${WORKER}/health`);
+      check('w-scan',`${WORKER}/land/scan`,{method:'POST',headers:passHeaders()});
+      check('w-summary',`${WORKER}/land/summary`,{method:'POST',headers:passHeaders()});
+    }
+    window.onload = runChecks;
+    function sync(){
+      check('w-scan',`${WORKER}/land/scan`,{method:'POST',headers:passHeaders()});
+    }
+    function audit(){
+      check('w-summary',`${WORKER}/land/summary`,{method:'POST',headers:passHeaders()});
+    }
   </script>
+</head>
+<body>
+  <div class="container">
+    <h1>System Check</h1>
+    <div>
+      <button onclick="sync()">Sync</button>
+      <button onclick="audit()">Audit</button>
+    </div>
+    <table>
+      <tr><th>Endpoint</th><th>Status</th></tr>
+      <tr><td>Vercel /api/ping</td><td id="vercel"></td></tr>
+      <tr><td>Worker /health</td><td id="w-health"></td></tr>
+      <tr><td>Worker /land/scan</td><td id="w-scan"></td></tr>
+      <tr><td>Worker /land/summary</td><td id="w-summary"></td></tr>
+    </table>
+  </div>
 </body>
 </html>
