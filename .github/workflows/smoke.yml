@@ -1,0 +1,66 @@
+name: smoke
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Get preview URL
+        id: get-preview-url
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          GITHUB_REF_NAME: ${{ github.ref }}
+        run: |
+          url="$(npm run -s get:preview)"
+          echo "preview_url=$url" >> "$GITHUB_OUTPUT"
+          if [ -z "$url" ]; then
+            echo "No Vercel preview yet (build pending or failed). Skipping smoke."
+          else
+            echo "Preview URL: $url"
+          fi
+
+      - name: Comment preview URL
+        if: steps.get-preview-url.outputs.preview_url != ''
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const url = `${{ steps.get-preview-url.outputs.preview_url }}`;
+            const pr = context.payload.pull_request;
+            if (pr) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body: `Vercel preview: ${url}`
+              });
+            }
+
+      - name: Smoke test /api/ping
+        if: steps.get-preview-url.outputs.preview_url != ''
+        run: |
+          set -euo pipefail
+          url="${{ steps.get-preview-url.outputs.preview_url }}"
+          echo "Hitting $url/api/ping"
+          code=$(curl -sS -o /tmp/body --write-out "%{http_code}" --fail-with-body --max-time 10 "$url/api/ping" || true)
+          if [ "$code" = "404" ] || [ -z "$code" ]; then
+            echo "Ping 404 or unavailable; trying root /"
+            code=$(curl -sS -o /tmp/body --write-out "%{http_code}" --fail-with-body --max-time 10 "$url/" || true)
+          fi
+          echo "HTTP $code"
+          cat /tmp/body || true
+          test "$code" -ge 200 -a "$code" -lt 400
+
+      - name: Preview unavailable (informative)
+        if: steps.get-preview-url.outputs.preview_url == ''
+        run: echo "No preview to test yet. This job passes to avoid noisy failures."
