@@ -5,6 +5,9 @@ export default function Footer() {
         Email: <a href="mailto:hello@example.com" className="underline">hello@example.com</a>
       </p>
       <p>Socials: coming soon</p>
+      <p>
+        <a href="/context.html" className="underline">Project Context</a>
+      </p>
     </footer>
   );
 }

@@ -1,0 +1,27 @@
+# QUICK_START—current_step
+
+## What's next
+1. Verify worker /health
+2. Run land scan
+3. Run land summary
+4. Review donor leads
+5. Update Notion database
+6. Send Telegram digest
+7. Audit Stripe links
+8. Review CI failures
+9. Triage open PRs
+10. Plan next actions
+
+## Current errors
+- None observed.
+
+## cURL tests
+
+# Health
+curl -s https://tight-snow-2840.messyandmagnetic.workers.dev/health
+
+# Scan
+curl -s -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/scan
+
+# Summary
+curl -s -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary

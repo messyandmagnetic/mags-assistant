@@ -76,6 +76,14 @@ export default {
       return json({ ok: true, env: summary });
     }
 
+    // status endpoint listing routes and env names
+    if (pathname === '/status' && method === 'GET') {
+      const envKeys = ['FETCH_PASS','GOOGLE_CLIENT_EMAIL','GOOGLE_PRIVATE_KEY_P1','GOOGLE_PRIVATE_KEY_P2','GOOGLE_PRIVATE_KEY_P3','GOOGLE_PRIVATE_KEY_P4','NOTION_TOKEN','NOTION_DATABASE_ID','TELEGRAM_BOT_TOKEN','TELEGRAM_CHAT_ID','STRIPE_WEBHOOK_SECRET'];
+      const present = envKeys.filter((k) => Boolean(env[k]));
+      const routes = ['/health','/diag','/api/telegram/send','/api/telegram/webhook','/api/tally/webhook','/api/stripe/webhook','/api/stripe/audit','/api/queue/claim','/api/queue/ack','/ai/draft-reply','/ai/summarize','/land/scan','/land/summary','/ops/digest','/profile/share','/profile/export','/check','/status'];
+      return json({ ok: true, routes, env: present });
+    }
+
     // send message to telegram
     if (pathname === '/api/telegram/send' && method === 'POST') {
       const { text = '' } = await request.json();
