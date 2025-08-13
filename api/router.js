@@ -32,6 +32,7 @@ import crypto from 'crypto';
 import { log as logEntry } from '../lib/logger.js';
 import { enqueueNewVideos, handleApprove, handleDecline, autoApproveOld } from '../lib/drive-watcher.js';
 import { ensureProfileDb } from '../lib/notion_profile.js';
+import { diagGcp, gcpAudit } from '../lib/gcp.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -204,6 +205,16 @@ async function diag_drive(req, res) {
   } catch (e) {
     return res.json({ ok: false, reason: e.message, next_steps });
   }
+}
+
+async function diag_gcp(req, res) {
+  const r = await diagGcp();
+  res.json(r);
+}
+
+async function gcp_audit(req, res) {
+  const r = await gcpAudit();
+  res.json(r);
 }
 
 async function diag_cron(req, res) {
@@ -583,8 +594,10 @@ async function cron_gmail_scan(req, res) {
     diag_stripe,
     diag_telegram,
     diag_drive,
+    diag_gcp,
     diag_cron,
     diag_tiktok,
+    gcp_audit,
     tiktok_auth_start,
     tiktok_auth_callback,
     telegram_command,
@@ -595,9 +608,9 @@ async function cron_gmail_scan(req, res) {
     gmail_scan,
     gmail_nudge,
     cron_daily,
-  cron_digest,
-  cron_stripe_poll,
-  cron_gmail_scan,
+    cron_digest,
+    cron_stripe_poll,
+    cron_gmail_scan,
 };
 
 export default async function handler(req, res) {
@@ -620,8 +633,10 @@ export default async function handler(req, res) {
         '/api/diag/stripe': 'diag_stripe',
         '/api/diag/telegram': 'diag_telegram',
         '/api/diag/drive': 'diag_drive',
+        '/api/diag/gcp': 'diag_gcp',
         '/api/diag/cron': 'diag_cron',
         '/api/diag/tiktok': 'diag_tiktok',
+        '/api/gcp/audit': 'gcp_audit',
         '/api/stripe/audit': 'stripe_audit',
           '/api/stripe/webhook': 'stripe_webhook',
           '/api/gmail/scan': 'gmail_scan',
