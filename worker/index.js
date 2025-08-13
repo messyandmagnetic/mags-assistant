@@ -145,8 +145,12 @@ export default {
       financing: `Hello [Name],\nThank you for your willingness to help us secure the Coyote Commons property. We’re pursuing a short-term bridge while philanthropic funds clear. I’m most comfortable handling details by email—could you share the ballpark terms you’d consider (amount, term, interest, collateral)? I’ll reply quickly with any materials you need.\nWarmly,\n[Your Name]`,
       'donor/grant': `Hi [Name],\nThank you for your interest in Coyote Commons—a regenerative land + community hub. Our donation link is ready for immediate gifts that secure the land. I prefer email, so if you have questions, feel free to reply here and I’ll send the one-page brief and receipt details.\nWith gratitude,\n[Your Name]`,
       'realtor/seller': `Hi [Name],\nWe’re advancing financing on parallel tracks (bridge + philanthropic) and moving quickly. I prefer email—could you share any timeline updates or active offers so we can align our written offer?\nBest,\n[Your Name]`,
-      'general-info': `Hi [Name],\nHappy to continue via email and provide any details you need about Coyote Commons. Phone if necessary.\nBest,\n[Your Name]`
+    'general-info': `Hi [Name],\nHappy to continue via email and provide any details you need about Coyote Commons. Phone if necessary.\nBest,\n[Your Name]`
     };
+
+    if (pathname === '/land/scan' && method === 'POST') {
+      return json({ ok: true, scanned: 0 });
+    }
 
     if (pathname === '/land/summary' && method === 'POST') {
       const body = await request.json();

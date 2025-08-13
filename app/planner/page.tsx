@@ -1,3 +1,5 @@
+export const dynamic = 'force-static';
+
 import { getNotion } from '../../lib/clients/notion';
 import SyncStripeButton from '../../components/SyncStripeButton';
 

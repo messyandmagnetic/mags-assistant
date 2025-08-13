@@ -1,4 +1,7 @@
 'use client';
+
+export const dynamic = 'force-static';
+
 import React, { useState } from 'react';
 
 export default function StripeAdminPage() {

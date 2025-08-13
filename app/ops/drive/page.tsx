@@ -1,4 +1,7 @@
 'use client';
+
+export const dynamic = 'force-static';
+
 import { useState, useEffect } from 'react';
 
 export default function DriveOpsPage() {
