@@ -2,7 +2,7 @@
 
 import { NextRequest } from 'next/server';
 
-export const runtime = 'nodejs';
+export const runtime = 'nodejs18.x';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
 const TG_API = `https://api.telegram.org/bot${BOT_TOKEN}`;

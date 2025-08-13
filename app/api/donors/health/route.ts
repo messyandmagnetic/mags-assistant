@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 
-export const runtime = 'nodejs';
+export const runtime = 'nodejs18.x';
 
 async function readDonorDbId() {
   if (process.env.DONORS_DATABASE_ID) return process.env.DONORS_DATABASE_ID;

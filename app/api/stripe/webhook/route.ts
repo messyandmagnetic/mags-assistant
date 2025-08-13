@@ -3,7 +3,7 @@ import Stripe from 'stripe';
 import { Client } from '@notionhq/client';
 import fs from 'fs/promises';
 
-export const runtime = 'nodejs';
+export const runtime = 'nodejs18.x';
 
 async function getDonorDbId(notion: Client): Promise<string> {
   const envId = process.env.DONORS_DATABASE_ID;
