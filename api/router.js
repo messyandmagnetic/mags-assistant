@@ -38,6 +38,7 @@ export const config = { api: { bodyParser: false } };
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
 let paused = env.EXECUTION_PAUSED;
+let telegramOffset = 0;
 
 function checkRate(req, limit = 5) {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'local';
@@ -224,6 +225,105 @@ async function diag_cron(req, res) {
   });
 }
 
+// Telegram commands and polling
+async function handleTelegramCommand(text) {
+  let reply = null;
+  if (text === '/ping') reply = 'pong \u2705';
+  if (text === '/status') reply = 'ok';
+  if (text === '/scan') {
+    try {
+      await fetch(`${process.env.API_BASE || ''}/api/router?action=gmail_scan`, { method: 'POST' });
+    } catch {}
+    reply = 'scan queued';
+  }
+  if (text === '/run prospecting') reply = 'prospecting queued';
+  if (text === '/digest test') {
+    try {
+      await fetch(`${process.env.API_BASE || ''}/api/router?action=cron_digest`, { method: 'POST' });
+    } catch {}
+    reply = 'digest queued';
+  }
+  if (text === '/pause') {
+    paused = true;
+    reply = 'paused';
+  }
+  if (text === '/resume') {
+    paused = false;
+    reply = 'resumed';
+  }
+  if (!reply) reply = `queued: ${text}`;
+  return reply;
+}
+
+async function telegram_command(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ ok: false });
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const chatId = env.TELEGRAM_CHAT_ID;
+  const next_steps = [];
+  if (!token) next_steps.push('Set TELEGRAM_BOT_TOKEN');
+  if (!chatId) next_steps.push('Set TELEGRAM_CHAT_ID');
+  if (next_steps.length) return res.json({ ok: false, reason: 'missing Telegram config', next_steps });
+  const body = typeof req.body === 'object' ? req.body : await readJson(req);
+  const text = (body.text || '').trim();
+  const incomingId = body.chat_id ? String(body.chat_id) : String(chatId);
+  if (incomingId !== String(chatId)) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  const reply = await handleTelegramCommand(text);
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: reply }),
+  });
+  res.json({ ok: true, reply });
+}
+
+async function telegram_webhook(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ ok: false });
+  const token = env.TELEGRAM_BOT_TOKEN;
+  if (!token) return bad(res, 'No TELEGRAM_BOT_TOKEN', 501);
+  const update = typeof req.body === 'object' ? req.body : await readJson(req);
+  const chatId = update?.message?.chat?.id;
+  if (!chatId || String(chatId) !== String(env.TELEGRAM_CHAT_ID))
+    return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  const text = (update?.message?.text || '').trim();
+  await logEntry('telegram', 'incoming', { text });
+  const reply = await handleTelegramCommand(text);
+  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ chat_id: chatId, text: reply }),
+  });
+  return ok(res, { received: true });
+}
+
+async function telegram_poll(req, res) {
+  if (!cronAuth(req.url)) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  const token = env.TELEGRAM_BOT_TOKEN;
+  const chatId = env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return res.json({ ok: false, reason: 'missing Telegram config' });
+  try {
+    const r = await fetch(
+      `https://api.telegram.org/bot${token}/getUpdates?offset=${telegramOffset}`
+    );
+    const data = await r.json().catch(() => ({}));
+    for (const u of data.result || []) {
+      telegramOffset = u.update_id + 1;
+      const text = (u.message?.text || '').trim();
+      const cid = u.message?.chat?.id;
+      if (text && String(cid) === String(chatId)) {
+        const reply = await handleTelegramCommand(text);
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId, text: reply }),
+        });
+      }
+    }
+    return ok(res, { processed: (data.result || []).length });
+  } catch (e) {
+    return res.json({ ok: false, reason: e.message });
+  }
+}
+
 async function stripe_audit(req, res) {
   const next_steps = [];
   if (!env.STRIPE_SECRET_KEY) {
@@ -347,18 +447,21 @@ async function cron_gmail_scan(req, res) {
   ok(res);
 }
 
-const actionMap = {
-  diag_health,
-  diag_notion,
-  diag_stripe,
-  diag_telegram,
-  diag_drive,
-  diag_cron,
-  stripe_audit,
-  stripe_webhook,
-  gmail_scan,
-  gmail_nudge,
-  cron_daily,
+  const actionMap = {
+    diag_health,
+    diag_notion,
+    diag_stripe,
+    diag_telegram,
+    diag_drive,
+    diag_cron,
+    telegram_command,
+    telegram_webhook,
+    telegram_poll,
+    stripe_audit,
+    stripe_webhook,
+    gmail_scan,
+    gmail_nudge,
+    cron_daily,
   cron_digest,
   cron_stripe_poll,
   cron_gmail_scan,
@@ -386,14 +489,17 @@ export default async function handler(req, res) {
         '/api/diag/drive': 'diag_drive',
         '/api/diag/cron': 'diag_cron',
         '/api/stripe/audit': 'stripe_audit',
-        '/api/stripe/webhook': 'stripe_webhook',
-        '/api/gmail/scan': 'gmail_scan',
-        '/api/gmail/nudge': 'gmail_nudge',
-        '/api/cron/daily': 'cron_daily',
-        '/api/cron/digest': 'cron_digest',
-        '/api/cron/stripe-poll': 'cron_stripe_poll',
-        '/api/cron/gmail-scan': 'cron_gmail_scan',
-      };
+          '/api/stripe/webhook': 'stripe_webhook',
+          '/api/gmail/scan': 'gmail_scan',
+          '/api/gmail/nudge': 'gmail_nudge',
+          '/api/cron/daily': 'cron_daily',
+          '/api/cron/digest': 'cron_digest',
+          '/api/cron/stripe-poll': 'cron_stripe_poll',
+          '/api/cron/gmail-scan': 'cron_gmail_scan',
+          '/api/telegram/command': 'telegram_command',
+          '/api/telegram/poll': 'telegram_poll',
+          '/api/telegram/webhook': 'telegram_webhook',
+        };
       action = pathActionMap[parsed.pathname];
     }
     if (action && actionMap[action]) {
@@ -461,44 +567,6 @@ export default async function handler(req, res) {
     if (pathname === '/api/hello') return ok(res, { hello: 'mags' });
     if (pathname === '/api/health' && method === 'GET') {
       return res.status(200).json({ ok: true, vercel: 'online' });
-    }
-
-    if (pathname === '/api/diag/notion' && method === 'GET') {
-      if (!env.NOTION_TOKEN) return res.status(200).json({ ok: false, reason: 'missing NOTION_TOKEN' });
-      try {
-        const r = await fetch('https://api.notion.com/v1/users/me', {
-          headers: {
-            Authorization: `Bearer ${env.NOTION_TOKEN}`,
-            'Notion-Version': '2022-06-28',
-          },
-        });
-        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
-      } catch (e) {
-        return res.status(200).json({ ok: false, reason: e.message });
-      }
-    }
-
-    if (pathname === '/api/diag/stripe' && method === 'GET') {
-      if (!env.STRIPE_SECRET_KEY) return res.status(200).json({ ok: false, reason: 'missing STRIPE_SECRET_KEY' });
-      try {
-        const r = await fetch('https://api.stripe.com/v1/balance', {
-          headers: { Authorization: `Bearer ${env.STRIPE_SECRET_KEY}` },
-        });
-        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
-      } catch (e) {
-        return res.status(200).json({ ok: false, reason: e.message });
-      }
-    }
-
-    if (pathname === '/api/diag/telegram' && method === 'GET') {
-      if (!env.TELEGRAM_BOT_TOKEN)
-        return res.status(200).json({ ok: false, reason: 'missing TELEGRAM_BOT_TOKEN' });
-      try {
-        const r = await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/getMe`);
-        return res.status(200).json({ ok: r.ok, reason: r.ok ? undefined : `status ${r.status}` });
-      } catch (e) {
-        return res.status(200).json({ ok: false, reason: e.message });
-      }
     }
 
     if (pathname === '/api/diag/tally' && method === 'GET') {
@@ -660,36 +728,6 @@ export default async function handler(req, res) {
           await addSheet(sheet.id, 'Stripe Events', ['Timestamp', 'Type', 'ID']);
         } catch {}
         await appendRows(sheet.id, 'Stripe Events!A:C', [[new Date().toISOString(), event.type, event.id]]);
-      }
-      return ok(res, { received: true });
-    }
-
-    // ===== Telegram webhook =====
-    if ((pathname === '/api/telegram' || pathname === '/api/telegram/webhook') && method === 'POST') {
-      const token = env.TELEGRAM_BOT_TOKEN;
-      if (!token) return bad(res, 'No TELEGRAM_BOT_TOKEN', 501);
-      const update = typeof req.body === 'object' ? req.body : await readJson(req);
-      const chatId = update?.message?.chat?.id || env.TELEGRAM_CHAT_ID;
-      const text = (update?.message?.text || '').trim();
-      await logEntry('telegram', 'incoming', { text });
-      let reply = null;
-      if (text === '/ping') reply = 'pong ✅';
-      if (text === '/status') reply = 'ok';
-      if (text === '/links') {
-        reply = [
-          env.NEXT_PUBLIC_SITE_URL || 'https://assistant.messyandmagnetic.com',
-          env.MASTER_MEMORY_SHEET_ID || 'memory sheet n/a',
-          env.NOTION_HQ_PAGE_ID ? `https://notion.so/${env.NOTION_HQ_PAGE_ID}` : 'notion n/a',
-        ].join('\n');
-      }
-      if (text === '/pricecheck') reply = 'price audit not implemented';
-      if (!reply && /quiz|blueprint|email|pdf/i.test(text)) reply = 'job queued';
-      if (reply && chatId) {
-        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: chatId, text: reply }),
-        });
       }
       return ok(res, { received: true });
     }
