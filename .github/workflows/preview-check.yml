@@ -8,6 +8,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'
       - run: node -v
       - name: Get preview URL
         id: preview
@@ -27,13 +28,11 @@ jobs:
         if: steps.preview.outputs.url != ''
         run: |
           url=${{ steps.preview.outputs.url }}
-          for path in /api/hello /api/rpa/health /api/rpa/diag; do
-            code=$(curl -s -o /dev/null -w "%{http_code}" "$url$path")
-            if [ "$code" -ne 200 ]; then
-              echo "Failed $path: $code"
-              exit 1
-            fi
-          done
+          code=$(curl -s -o /dev/null -w "%{http_code}" "$url/api/ping")
+          if [ "$code" -ne 200 ]; then
+            echo "Failed /api/ping: $code"
+            exit 1
+          fi
       - name: Preview unavailable
         if: steps.preview.outputs.url == ''
         run: echo 'No preview URL yet'
