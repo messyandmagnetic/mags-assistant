@@ -1,4 +1,18 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "framework": "other"
+
+  // Keep it simple: let Vercel detect functions from /api and serve static from /public
+  // If you do have a static site build step, uncomment the two lines below and make sure the scripts exist in package.json
+  "installCommand": "npm ci",
+  "buildCommand": "npm run build",
+  "outputDirectory": "public",
+
+  // Functions: set a modern runtime once, no legacy “now-*” or “nodejs18.x”
+  "functions": {
+    "api/**": { "runtime": "nodejs20.x", "maxDuration": 10 }
+  }
+
+  // IMPORTANT: Do not include "framework": "...", "routes", or anything legacy here.
+  // If you need path rewrites later, use *only one* of: rewrites/redirects/headers (do not combine with routes).
 }
