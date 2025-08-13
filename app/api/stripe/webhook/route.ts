@@ -59,12 +59,15 @@ async function upsertDonor(
 }
 
 export async function POST(req: NextRequest) {
-  const secret = process.env.STRIPE_WEBHOOK_SECRET;
-  const stripeKey = process.env.STRIPE_SECRET_KEY;
-  const notionToken = process.env.NOTION_TOKEN;
-  if (!secret || !stripeKey || !notionToken) {
-    return NextResponse.json({ ok: false, error: 'missing-env' }, { status: 500 });
+  const missing = ['STRIPE_WEBHOOK_SECRET', 'STRIPE_SECRET_KEY', 'NOTION_TOKEN'].filter(
+    (v) => !process.env[v]
+  );
+  if (missing.length) {
+    return NextResponse.json({ ok: false, missing });
   }
+  const secret = process.env.STRIPE_WEBHOOK_SECRET!;
+  const stripeKey = process.env.STRIPE_SECRET_KEY!;
+  const notionToken = process.env.NOTION_TOKEN!;
   const payload = await req.text();
   const sig = req.headers.get('stripe-signature') || '';
   let event: Stripe.Event;
