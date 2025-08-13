@@ -2,9 +2,11 @@
   "name": "mags-assistant",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=20 <21" },
   "scripts": {
-    "build": "echo \"static + api\"",
-    "start": "node server.js || echo \"Using Vercel serverless\"",
+    "build": "next build || echo 'no next; skipping'",
+    "start": "next start || node server.js || node",
+    "vercel-build": "npm run build",
     "test": "node -e \"console.log('no tests')\"",
     "trends": "tsx scripts/trends.ts",
     "link-check": "tsx scripts/link_check.ts",
