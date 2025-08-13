@@ -15,6 +15,47 @@ Test links:
 - https://mags-assistant.vercel.app/planner — planner page
 - https://mags-assistant.vercel.app/check — system check panel
 
+## Keeping ≤12 functions (Hobby plan)
+
+Vercel's Hobby plan allows a maximum of twelve serverless functions. Small API
+endpoints are routed through `/api/router` and background utilities run on the
+Cloudflare Worker to stay under the limit.
+
+Vercel API routes:
+
+- `/api/router` – gateway for small actions such as health checks and utility
+  endpoints
+- `/api/stripe/webhook`
+
+Worker endpoints:
+
+- `https://tight-snow-2840.messyandmagnetic.workers.dev/health`
+- `https://tight-snow-2840.messyandmagnetic.workers.dev/land/scan`
+- `https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary`
+
+## Ops helpers
+
+### GCP cost guard
+
+Supports metadata and service‑account modes. Supply `GOOGLE_CLIENT_EMAIL`,
+`GOOGLE_PRIVATE_KEY_P1..P4`, and `GOOGLE_PROJECT_ID` locally or rely on the GCE
+metadata server. Run:
+
+```sh
+npm run gcp:cost-guard
+```
+
+### Daily digest
+
+If `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` are set, send a one-off summary:
+
+```sh
+npm run ops:digest
+```
+
+The digest includes new Stripe payments, Land Outreach replies, and missing
+environment variables.
+
 Example curl for /start:
 
 ```sh
