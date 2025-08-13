@@ -1,13 +1,30 @@
 name: Smoke Health Check
-
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: "0 */3 * * *"
   workflow_dispatch:
+
+env:
+  WORKFLOW_BASE_URL: ${{ secrets.PROD_URL || vars.PROD_URL || 'https://mags-assistant.vercel.app' }}
 
 jobs:
   health:
     runs-on: ubuntu-latest
     steps:
-      - name: Check /api/health
-        run: curl -fsS https://assistant.messyandmagnetic.com/api/health
+      - name: Show URL
+        run: echo "Checking $WORKFLOW_BASE_URL"
+
+      - name: Check /api/ping (JSON)
+        id: check_json
+        continue-on-error: true
+        run: |
+          set -euxo pipefail
+          curl -fsS "$WORKFLOW_BASE_URL/api/ping" | tee /tmp/body.json
+          grep -q '"ok": *true' /tmp/body.json
+
+      - name: Fallback /ping.txt
+        if: steps.check_json.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          curl -fsS "$WORKFLOW_BASE_URL/ping.txt" | grep -iq '^ok$'
+
