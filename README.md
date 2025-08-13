@@ -15,6 +15,18 @@ Test links:
 - https://mags-assistant.vercel.app/planner — planner page
 - https://mags-assistant.vercel.app/check — system check panel
 
+## API map
+
+- `POST /api/ops?action=status` – list present env vars
+- `POST /api/ops?action=check` – simple health ping
+- `POST /api/stripe-webhook` – Stripe events (rewrite to `/api/ops?action=stripe-webhook`)
+
+Env vars:
+
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_FETCH_PASS` (optional)
+
 ## Worker testing
 
 ```sh

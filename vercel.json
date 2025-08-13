@@ -1,29 +1,7 @@
 {
   "rewrites": [
     { "source": "/check", "destination": "/check.html" },
-    { "source": "/diag/cron", "destination": "/diag/cron.html" },
-    { "source": "/api/diag/health",      "destination": "/api/router?action=diag_health" },
-    { "source": "/api/diag/notion",      "destination": "/api/router?action=diag_notion" },
-    { "source": "/api/diag/stripe",      "destination": "/api/router?action=diag_stripe" },
-    { "source": "/api/diag/telegram",    "destination": "/api/router?action=diag_telegram" },
-    { "source": "/api/diag/drive",       "destination": "/api/router?action=diag_drive" },
-    { "source": "/api/diag/gcp",        "destination": "/api/router?action=diag_gcp" },
-    { "source": "/api/diag/cron",        "destination": "/api/router?action=diag_cron" },
-    { "source": "/api/diag/tiktok",      "destination": "/api/router?action=diag_tiktok" },
-    { "source": "/api/gcp/audit",       "destination": "/api/router?action=gcp_audit" },
-    { "source": "/api/stripe/audit",     "destination": "/api/router?action=stripe_audit" },
-    { "source": "/api/stripe/webhook",   "destination": "/api/router?action=stripe_webhook" },
-    { "source": "/api/gmail/scan",       "destination": "/api/router?action=gmail_scan" },
-    { "source": "/api/gmail/nudge",      "destination": "/api/router?action=gmail_nudge" },
-    { "source": "/api/cron/daily",       "destination": "/api/router?action=cron_daily" },
-    { "source": "/api/cron/digest",      "destination": "/api/router?action=cron_digest" },
-    { "source": "/api/cron/stripe-poll", "destination": "/api/router?action=cron_stripe_poll" },
-    { "source": "/api/cron/gmail-scan",  "destination": "/api/router?action=cron_gmail_scan" },
-    { "source": "/api/telegram/command", "destination": "/api/router?action=telegram_command" },
-    { "source": "/api/telegram/poll",    "destination": "/api/router?action=telegram_poll" },
-    { "source": "/api/telegram/webhook", "destination": "/api/router?action=telegram_webhook" },
-    { "source": "/api/tiktok/auth/start",    "destination": "/api/router?action=tiktok_auth_start" },
-    { "source": "/api/tiktok/auth/callback", "destination": "/api/router?action=tiktok_auth_callback" }
+    { "source": "/api/stripe-webhook", "destination": "/api/ops?action=stripe-webhook" }
   ],
   "headers": [
     {

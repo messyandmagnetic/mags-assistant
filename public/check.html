@@ -6,68 +6,48 @@
   <title>System Check</title>
   <link rel="stylesheet" href="/brand.css" />
   <style>
-    #status div{padding:8px;margin:4px;border:1px solid #ccc}
-    #status div.ok{background:#c7f5d9}
-    #status div.fail{background:#f5c7c7}
-    pre{background:#eee;padding:8px;white-space:pre-wrap}
+    button{margin:4px}
   </style>
 </head>
 <body>
   <div class="container">
     <h1>System Check</h1>
-    <div id="status"></div>
     <div>
-      <button id="btn-sync">Sync</button>
-      <button id="btn-audit">Audit</button>
-      <button id="btn-ai" style="display:none">AI Draft (dev)</button>
+      <button id="btn-health">Vercel API</button>
+      <span id="health-status"></span>
     </div>
-    <pre id="result"></pre>
+    <div>
+      <button id="btn-worker">Worker</button>
+      <span id="worker-status"></span>
+    </div>
   </div>
   <script>
-    const WORKER = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
-    const VERCEL = 'https://mags-assistant.vercel.app';
-    const FETCH_PASS = window.NEXT_PUBLIC_FETCH_PASS || '';
-    const baseHeaders = FETCH_PASS ? { 'X-Fetch-Pass': FETCH_PASS } : {};
-
-    async function check(){
-      const items=[
-        {name:'Vercel',url:`${VERCEL}/api/health`,method:'GET'},
-        {name:'Worker',url:`${WORKER}/health`,method:'GET'},
-        {name:'Scan',url:`${WORKER}/land/scan`,method:'POST'},
-        {name:'Summary',url:`${WORKER}/land/summary`,method:'POST'},
-      ];
-      const host=document.getElementById('status');
-      for(const it of items){
-        const div=document.createElement('div');
-        div.textContent=`${it.name}: …`;
-        host.appendChild(div);
-        try{
-          const r=await fetch(it.url,{method:it.method,headers:{'content-type':'application/json',...baseHeaders},body:it.method==='POST'?"{}":undefined});
-          const j=await r.json();
-          div.textContent=`${it.name}: ${j.ok?'ok':j.error||'fail'}`;
-          div.className=j.ok?'ok':'fail';
-        }catch(e){
-          div.textContent=`${it.name}: error`;
-          div.className='fail';
-        }
+    async function ping(id, url) {
+      const el = document.getElementById(id);
+      try {
+        const res = await fetch(url, { method: 'POST' });
+        const js = await res.json();
+        el.textContent = (js.ok ? 'ok' : 'fail');
+        el.style.color = js.ok ? 'green' : 'red';
+      } catch (e) {
+        el.textContent = 'fail';
+        el.style.color = 'red';
       }
     }
-    check();
 
-    async function call(path, payload={}){
-      const res=document.getElementById('result');
-      res.textContent='…';
-      const r=await fetch(WORKER+path,{method:'POST',headers:{'content-type':'application/json',...baseHeaders},body:JSON.stringify(payload)});
-      const j=await r.json();
-      res.textContent=JSON.stringify(j,null,2);
-    }
+    // Example bindings
+    // Health of Vercel API
+    document.getElementById('btn-health').onclick = () =>
+      ping('health-status', '/api/ops?action=check');
 
-    document.getElementById('btn-sync').onclick=()=>call('/land/scan');
-    document.getElementById('btn-audit').onclick=()=>call('/land/summary');
-    document.getElementById('btn-ai').onclick=()=>{
-      const sample={thread:{from:'Donor',summary:'Interested in conservation work',goal:'Secure pledge'}};
-      call('/ai/draft-reply',sample);
-    };
+    // Cloudflare Worker health (GET ok)
+    document.getElementById('btn-worker').onclick = () =>
+      fetch('https://tight-snow-2840.messyandmagnetic.workers.dev/health')
+        .then(r => r.ok ? 'ok' : 'fail')
+        .then(s => {
+          const el = document.getElementById('worker-status');
+          el.textContent = s; el.style.color = (s === 'ok' ? 'green' : 'red');
+        });
   </script>
 </body>
 </html>
