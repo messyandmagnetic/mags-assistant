@@ -1,0 +1,125 @@
+# PROJECT_CONTEXT—messyandmagnetic
+
+## Mission & Current Objective
+Coyote Commons land acquisition, donor + bridge-financing push.
+
+## Active Endpoints
+### Worker
+- https://tight-snow-2840.messyandmagnetic.workers.dev/ai/draft-reply
+- https://tight-snow-2840.messyandmagnetic.workers.dev/ai/summarize
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/queue/ack
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/queue/claim
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/stripe/audit
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/stripe/sync
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/stripe/webhook
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/tally/webhook
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/telegram/send
+- https://tight-snow-2840.messyandmagnetic.workers.dev/api/telegram/webhook
+- https://tight-snow-2840.messyandmagnetic.workers.dev/check
+- https://tight-snow-2840.messyandmagnetic.workers.dev/diag
+- https://tight-snow-2840.messyandmagnetic.workers.dev/digest
+- https://tight-snow-2840.messyandmagnetic.workers.dev/health
+- https://tight-snow-2840.messyandmagnetic.workers.dev/land/scan
+- https://tight-snow-2840.messyandmagnetic.workers.dev/land/summary
+- https://tight-snow-2840.messyandmagnetic.workers.dev/ops/digest
+- https://tight-snow-2840.messyandmagnetic.workers.dev/profile/export
+- https://tight-snow-2840.messyandmagnetic.workers.dev/profile/share
+- https://tight-snow-2840.messyandmagnetic.workers.dev/status
+- https://tight-snow-2840.messyandmagnetic.workers.dev/stripe/audit
+
+### Vercel
+- /api/_lib/env
+- /api/approve/route
+- /api/bootstrap/social/route
+- /api/chat/route
+- /api/chat/unread/route
+- /api/diag/notion/route
+- /api/diag/stripe/route
+- /api/diag/tally/route
+- /api/diag/telegram/route
+- /api/donors/health/route
+- /api/drive/notify/route
+- /api/drive/watch/route
+- /api/echo/route
+- /api/health/route
+- /api/ingest/video/route
+- /api/notify/route
+- /api/ops
+- /api/ping
+- /api/social/analyze/route
+- /api/social/run-scheduler/route
+- /api/social/schedule/route
+- /api/stripe/product/[id]/refresh-image/route
+- /api/stripe/sync/plan/route
+- /api/stripe/sync/route
+- /api/stripe/sync/run/route
+- /api/stripe/webhook/route
+- /api/telegram/route
+- /api/telegram/webhook/route
+
+## Environments & Secrets
+- ALLOWED_DOMAINS
+- API_BASE
+- BROWSERLESS_API_KEY
+- BROWSERLESS_TOKEN
+- CRON_SECRET
+- DALL_E_STYLE_PROMPT
+- DRIVE_PRODUCT_IMAGES_ROOT_ID
+- DRY_RUN
+- FETCH_PASS
+- GOOGLE_CLIENT_EMAIL
+- GOOGLE_KEY_URL
+- GOOGLE_PRIVATE_KEY_P1
+- GOOGLE_PRIVATE_KEY_P2
+- GOOGLE_PRIVATE_KEY_P3
+- GOOGLE_PRIVATE_KEY_P4
+- MAGS_KEY
+- NOTION_DATABASE_ID
+- NOTION_DB_RUNS_ID
+- NOTION_HQ_PAGE_ID
+- NOTION_INBOX_PAGE_ID
+- NOTION_STRIPE_DB_ID
+- NOTION_TOKEN
+- RESEND_API_KEY
+- RESEND_FROM
+- SCRAPER_API_KEY
+- SCRAPER_ENDPOINT
+- SCRAPER_PROVIDER
+- STRIPE_SECRET_KEY
+- STRIPE_WEBHOOK_SECRET
+- TALLY_SECRET_FEEDBACK
+- TALLY_SECRET_MAIN
+- TALLY_WEBHOOK_SECRET
+- TELEGRAM_BOT_TOKEN
+- TELEGRAM_CHAT_ID
+- TIKTOK_APP_ID
+- TIKTOK_APP_SECRET
+- TIKTOK_REDIRECT_URL
+- WORKER_KEY
+
+## Stripe Links
+| Link | Env Var | Present |
+| --- | --- | --- |
+| One-time | GENERAL_ONE_TIME_HINT | TODO |
+| Monthly | GENERAL_MONTHLY_HINT | TODO |
+| Filing 250 | FILING_250_HINT | TODO |
+
+## Gmail label/filter plan
+Label: Land Outreach  
+Keywords: Laurie, Coyote, land, grant, donor, funding, financing, nonprofit
+
+## Notion targets
+- HQ page id: TODO
+- Donor DB id: TODO
+
+## Runbook – daily loop
+- Scan Stripe
+- Check Gmail label
+- Create follow-ups
+- Send Telegram digest
+
+## Open issues
+none
+
+## Manual steps
+- Review recent PRs and deployments manually.

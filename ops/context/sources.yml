@@ -1,0 +1,8 @@
+# Sources for context compilation
+- README.md
+- docs
+- recent_prs
+- public/check.html
+- worker
+- vercel.json
+- .runtime/*.json

@@ -13,41 +13,53 @@
   <div class="container">
     <h1>System Check</h1>
     <div>
-      <button id="btn-health">Vercel API</button>
+      <button id="btn-vercel">Vercel /api/ping</button>
+      <span id="vercel-status"></span>
+    </div>
+    <div>
+      <button id="btn-health">Worker /health</button>
       <span id="health-status"></span>
     </div>
     <div>
-      <button id="btn-worker">Worker</button>
-      <span id="worker-status"></span>
+      <button id="btn-scan">Worker /land/scan</button>
+      <span id="scan-status"></span>
     </div>
+    <div>
+      <button id="btn-summary">Worker /land/summary</button>
+      <span id="summary-status"></span>
+    </div>
+    <p><a href="/context.html">Project Context</a></p>
   </div>
   <script>
-    async function ping(id, url) {
+    const workerBase = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
+    async function call(id, method, url) {
       const el = document.getElementById(id);
+      el.textContent = '…';
       try {
-        const res = await fetch(url, { method: 'POST' });
-        const js = await res.json();
-        el.textContent = (js.ok ? 'ok' : 'fail');
-        el.style.color = js.ok ? 'green' : 'red';
+        const res = await fetch(url, { method });
+        let ok = false;
+        if (res.headers.get('content-type')?.includes('application/json')) {
+          const js = await res.json();
+          ok = js.ok;
+        } else {
+          ok = res.ok;
+        }
+        el.textContent = ok ? 'ok' : 'fail';
+        el.style.color = ok ? 'green' : 'red';
       } catch (e) {
         el.textContent = 'fail';
         el.style.color = 'red';
       }
     }
 
-    // Example bindings
-    // Health of Vercel API
+    document.getElementById('btn-vercel').onclick = () =>
+      call('vercel-status', 'GET', '/api/ping');
     document.getElementById('btn-health').onclick = () =>
-      ping('health-status', '/api/ops?action=check');
-
-    // Cloudflare Worker health (GET ok)
-    document.getElementById('btn-worker').onclick = () =>
-      fetch('https://tight-snow-2840.messyandmagnetic.workers.dev/health')
-        .then(r => r.ok ? 'ok' : 'fail')
-        .then(s => {
-          const el = document.getElementById('worker-status');
-          el.textContent = s; el.style.color = (s === 'ok' ? 'green' : 'red');
-        });
+      call('health-status', 'GET', `${workerBase}/health`);
+    document.getElementById('btn-scan').onclick = () =>
+      call('scan-status', 'POST', `${workerBase}/land/scan`);
+    document.getElementById('btn-summary').onclick = () =>
+      call('summary-status', 'POST', `${workerBase}/land/summary`);
   </script>
 </body>
 </html>
