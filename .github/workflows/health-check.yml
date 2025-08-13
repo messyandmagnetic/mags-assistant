@@ -1,13 +1,14 @@
 name: Smoke Health Check
-
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: "0 */3 * * *"   # every 3 hours
   workflow_dispatch:
 
 jobs:
   health:
     runs-on: ubuntu-latest
     steps:
-      - name: Check /api/health
-        run: curl -fsS https://assistant.messyandmagnetic.com/api/health
+      - name: Check production /api/ping
+        run: |
+          set -euxo pipefail
+          curl -fsS --max-time 15 https://mags-assistant.vercel.app/api/ping
