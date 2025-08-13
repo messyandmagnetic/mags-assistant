@@ -4,63 +4,64 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>System Check</title>
-  <link rel="stylesheet" href="/brand.css">
+  <link rel="stylesheet" href="/brand.css" />
 </head>
 <body>
   <div class="container">
     <h1>System Check</h1>
-    <div id="cards"></div>
-    <button id="btn-digest">Send test digest</button>
+    <table id="matrix">
+      <tr><th>Endpoint</th><th>Status</th><th></th></tr>
+      <tr id="vercel"><td>Vercel /api/health</td><td>...</td><td></td></tr>
+      <tr id="worker"><td>Worker /health</td><td>...</td><td></td></tr>
+      <tr id="scan"><td>Sync (/land/scan)</td><td>...</td><td><button id="btn-scan">Run</button></td></tr>
+      <tr id="summary"><td>Audit (/land/summary)</td><td>...</td><td><button id="btn-summary">Run</button></td></tr>
+    </table>
   </div>
 <script>
-const CARDS=[
-  {name:'API Health',url:'/api/diag/health'},
-  {name:'Notion',url:'/api/diag/notion'},
-  {name:'Stripe',url:'/api/diag/stripe'},
-  {name:'Gmail',url:'/api/diag/gmail'},
-  {name:'Telegram',url:'/api/diag/telegram'},
-  {name:'Drive',url:'/api/diag/drive'},
-  {name:'Cron',url:'/api/diag/cron'}
-];
-async function run(){
-  const host=document.getElementById('cards');
-  for(const c of CARDS){
-    const div=document.createElement('div');
-    div.className='card';
-    div.textContent=c.name+': checking...';
-    host.appendChild(div);
-    try{
-      const r=await fetch(c.url);
-      const j=await r.json();
-      if(j.ok){
-        div.classList.add('ok');
-        div.textContent=c.name;
-      }else{
-        div.classList.add('fail');
-        div.textContent=c.name+': '+(j.reason||'error');
-        if(j.next_steps&&j.next_steps[0]){
-          const ns=document.createElement('div');
-          ns.className='next';
-          ns.textContent=j.next_steps[0];
-          div.appendChild(ns);
-        }
-      }
-    }catch(e){
-      div.classList.add('fail');
-      div.textContent=c.name+': network error';
-    }
+const WORKER = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
+const PASS = (window.NEXT_PUBLIC_FETCH_PASS || '').trim();
+
+function setStatus(id, ok) {
+  const td = document.querySelector(`#${id} td:nth-child(2)`);
+  td.textContent = ok ? 'ok' : 'fail';
+  td.className = ok ? 'ok' : 'fail';
+}
+
+async function check() {
+  try {
+    const r = await fetch('/api/health');
+    setStatus('vercel', r.ok);
+  } catch {
+    setStatus('vercel', false);
+  }
+  try {
+    const r = await fetch(`${WORKER}/health`);
+    setStatus('worker', r.ok);
+  } catch {
+    setStatus('worker', false);
   }
 }
-run();
-document.getElementById('btn-digest').addEventListener('click',()=>{
-  fetch('/api/cron/digest?test=true', {method:'POST'});
-});
+check();
+
+async function post(path, row) {
+  const headers = PASS ? { 'X-Fetch-Pass': PASS } : {};
+  try {
+    const r = await fetch(`${WORKER}${path}`, { method: 'POST', headers });
+    const j = await r.json();
+    document.querySelector(`#${row} td:nth-child(2)`).textContent = JSON.stringify(j);
+  } catch (e) {
+    document.querySelector(`#${row} td:nth-child(2)`).textContent = 'error';
+  }
+}
+
+document.getElementById('btn-scan').onclick = () => post('/land/scan', 'scan');
+document.getElementById('btn-summary').onclick = () => post('/land/summary', 'summary');
 </script>
 <style>
-  .card{padding:10px;margin:6px;border:1px solid #ccc;}
-  .card.ok{background:#c7f5d9;}
-  .card.fail{background:#f5c7c7;}
-  .next{font-size:0.9em;margin-top:4px;}
+  table { border-collapse: collapse; }
+  th, td { border: 1px solid #ccc; padding: 4px; }
+  .ok { background: #c7f5d9; }
+  .fail { background: #f5c7c7; }
 </style>
 </body>
 </html>

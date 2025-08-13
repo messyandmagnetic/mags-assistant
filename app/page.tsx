@@ -1,5 +1,7 @@
 import ChatLink from '../components/ChatLink';
 
+export const dynamic = 'force-static';
+
 export default function HomePage() {
   return (
     <div className="p-4">
