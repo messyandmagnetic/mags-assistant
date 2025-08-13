@@ -2,12 +2,14 @@ name: Smoke Health Check
 
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: "0 * * * *"
   workflow_dispatch:
 
 jobs:
   health:
     runs-on: ubuntu-latest
     steps:
-      - name: Check /api/health
-        run: curl -fsS https://assistant.messyandmagnetic.com/api/health
+      - name: Ping production healthz
+        run: |
+          set -e
+          curl -fsSL https://mags-assistant.vercel.app/healthz.txt | grep -qi "^ok$"

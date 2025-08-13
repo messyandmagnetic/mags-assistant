@@ -1,36 +1,14 @@
-name: mags-cron
-
+name: Drive Review Ping
 on:
-  workflow_dispatch:
   schedule:
-    - cron: "*/10 * * * *"
+    - cron: "0 * * * *"
+  workflow_dispatch:
 
 jobs:
-  run:
-    if: env.USE_GH_CRON == 'true'
+  ping:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    env:
-      USE_GH_CRON: ${{ secrets.USE_GH_CRON }}
-      API_BASE: ${{ secrets.API_BASE }}
-      CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
-      - name: Trigger scan
-        shell: bash
+      - name: Ping production healthz
         run: |
-          set -euo pipefail
-          curl -sS -X POST "$API_BASE/api/commands/scan" \
-            -H "x-mags-key: $CRON_SECRET" \
-            -H "content-type: application/json" \
-            -d '{}' \
-            | tee scan.json
-      - name: Run due social posts
-        if: env.API_BASE == 'https://mags-assistant.vercel.app'
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -sS -X POST "$API_BASE/api/social/run-due" \
-            -H "x-mags-key: $CRON_SECRET" \
-            -H "content-type: application/json" \
-            -d '{}' \
-            | tee social.json
+          set -e
+          curl -fsSL https://mags-assistant.vercel.app/healthz.txt | grep -qi "^ok$"

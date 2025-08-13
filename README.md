@@ -266,3 +266,6 @@ Early support for generating short-form video drafts from a Google Drive inbox a
 - `YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` – YouTube uploads.
 - `TIKTOK_SESSION_COOKIE` – TikTok session with access to trending sounds.
 - `IG_SESSION_COOKIE` – Instagram session for selecting trending audio.
+
+Deployment is static on Vercel; health check lives at /healthz.txt.
+Workflows ping production and don’t require preview or Vercel tokens.
