@@ -16,7 +16,7 @@
 const CARDS=[
   {name:'API Health',url:'/api/diag/health'},
   {name:'Notion',url:'/api/diag/notion'},
-  {name:'Stripe',url:'/api/diag/stripe'},
+  {name:'Stripe',url:'https://tight-snow-2840.messyandmagnetic.workers.dev/health',dash:'https://dashboard.stripe.com/test/webhooks'},
   {name:'Gmail',url:'/api/diag/gmail'},
   {name:'Telegram',url:'/api/diag/telegram'},
   {name:'Drive',url:'/api/diag/drive'},
@@ -35,6 +35,14 @@ async function run(){
       if(j.ok){
         div.classList.add('ok');
         div.textContent=c.name;
+        if(c.dash){
+          const a=document.createElement('a');
+          a.href=c.dash;
+          a.target='_blank';
+          a.textContent='Send Stripe Test (dashboard)';
+          a.className='btn';
+          div.appendChild(a);
+        }
       }else{
         div.classList.add('fail');
         div.textContent=c.name+': '+(j.reason||'error');
@@ -61,6 +69,7 @@ document.getElementById('btn-digest').addEventListener('click',()=>{
   .card.ok{background:#c7f5d9;}
   .card.fail{background:#f5c7c7;}
   .next{font-size:0.9em;margin-top:4px;}
+  .btn{margin-left:8px;font-size:0.9em;}
 </style>
 </body>
 </html>
