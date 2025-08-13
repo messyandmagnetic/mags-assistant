@@ -1,8 +1,17 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "functions": {
+    "api/**/*.js": { "runtime": "nodejs22.x" },
+    "api/**/*.ts": { "runtime": "nodejs22.x" }
+  },
+  "cleanUrls": true,
+  "trailingSlash": false,
   "rewrites": [
     { "source": "/check", "destination": "/check.html" },
     { "source": "/api/stripe-webhook", "destination": "/api/ops?action=stripe-webhook" }
   ],
+  "redirects": [],
   "headers": [
     {
       "source": "/(.*)",
@@ -10,5 +19,8 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }
-  ]
+  ],
+  "installCommand": "npm install --no-package-lock",
+  "buildCommand": "",
+  "outputDirectory": "public"
 }
