@@ -14,6 +14,11 @@ jobs:
       WORKER_URL: ${{ secrets.WORKER_URL }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
       - name: Fetch trends
         run: npx tsx scripts/trends.ts
       - name: Notify failure
