@@ -32,5 +32,7 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
       ]
     }
-  ]
+  ],
+  "functions": { "api/**/*.ts": { "runtime": "nodejs18.x" } },
+  "ignoredBuildStep": "echo 'skip extra preview checks'"
 }

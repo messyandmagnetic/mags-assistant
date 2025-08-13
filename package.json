@@ -9,8 +9,10 @@
     "trends": "tsx scripts/trends.ts",
     "link-check": "tsx scripts/link_check.ts",
     "memory:compact": "tsx scripts/memory/compact.ts",
-    "social:health": "tsx scripts/social_health.ts",
-    "social:self-test": "tsx scripts/connectivity_self_test.ts"
+    "social:health": "tsx scripts/social_health.ts", 
+    "social:self-test": "tsx scripts/connectivity_self_test.ts",
+    "gcp:cost-guard": "node ops/gcp/cost-guard.js --apply",
+    "ops:digest": "node ops/digest.js"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",

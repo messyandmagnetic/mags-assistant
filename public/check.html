@@ -5,62 +5,67 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>System Check</title>
   <link rel="stylesheet" href="/brand.css">
+  <style>
+    table { border-collapse: collapse; width: 100%; max-width: 500px; }
+    td, th { border: 1px solid #ccc; padding: 6px; }
+    .ok { background: #c7f5d9; }
+    .fail { background: #f5c7c7; }
+  </style>
 </head>
 <body>
   <div class="container">
     <h1>System Check</h1>
-    <div id="cards"></div>
-    <button id="btn-digest">Send test digest</button>
+    <div>
+      <button id="btn-sync">Sync</button>
+      <button id="btn-audit">Audit</button>
+    </div>
+    <table id="status">
+      <thead>
+        <tr><th>Check</th><th>Status</th><th>Message</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
   </div>
 <script>
-const CARDS=[
-  {name:'API Health',url:'/api/diag/health'},
-  {name:'Notion',url:'/api/diag/notion'},
-  {name:'Stripe',url:'/api/diag/stripe'},
-  {name:'Gmail',url:'/api/diag/gmail'},
-  {name:'Telegram',url:'/api/diag/telegram'},
-  {name:'Drive',url:'/api/diag/drive'},
-  {name:'Cron',url:'/api/diag/cron'}
+const FETCH_PASS = typeof NEXT_PUBLIC_FETCH_PASS === 'string' ? NEXT_PUBLIC_FETCH_PASS : '';
+const WORKER = 'https://tight-snow-2840.messyandmagnetic.workers.dev';
+const VER = 'https://mags-assistant.vercel.app';
+const CHECKS = [
+  {name: 'Vercel Health', method:'GET', url: `${VER}/api/health`},
+  {name: 'Worker Health', method:'GET', url: `${WORKER}/health`},
+  {name: 'Land Scan', method:'POST', url: `${WORKER}/land/scan`},
+  {name: 'Land Summary', method:'POST', url: `${WORKER}/land/summary`},
 ];
-async function run(){
-  const host=document.getElementById('cards');
-  for(const c of CARDS){
-    const div=document.createElement('div');
-    div.className='card';
-    div.textContent=c.name+': checking...';
-    host.appendChild(div);
+function hdrs(){const h={'Content-Type':'application/json'};if(FETCH_PASS)h['X-Fetch-Pass']=FETCH_PASS;return h;}
+async function runChecks(){
+  const tbody=document.querySelector('#status tbody');
+  tbody.innerHTML='';
+  for(const c of CHECKS){
+    const row=document.createElement('tr');
+    row.innerHTML=`<td>${c.name}</td><td>...</td><td></td>`;
+    tbody.appendChild(row);
     try{
-      const r=await fetch(c.url);
-      const j=await r.json();
-      if(j.ok){
-        div.classList.add('ok');
-        div.textContent=c.name;
-      }else{
-        div.classList.add('fail');
-        div.textContent=c.name+': '+(j.reason||'error');
-        if(j.next_steps&&j.next_steps[0]){
-          const ns=document.createElement('div');
-          ns.className='next';
-          ns.textContent=j.next_steps[0];
-          div.appendChild(ns);
-        }
-      }
+      const r=await fetch(c.url,{method:c.method,headers:hdrs(),body:c.method==='POST'?"{}":undefined});
+      const text=await r.text();
+      const ok=r.ok;
+      row.cells[1].textContent=ok?'ok':'fail';
+      row.cells[1].className=ok?'ok':'fail';
+      row.cells[2].textContent=text.slice(0,80);
     }catch(e){
-      div.classList.add('fail');
-      div.textContent=c.name+': network error';
+      row.cells[1].textContent='fail';
+      row.cells[1].className='fail';
+      row.cells[2].textContent=e.message;
     }
   }
 }
-run();
-document.getElementById('btn-digest').addEventListener('click',()=>{
-  fetch('/api/cron/digest?test=true', {method:'POST'});
+runChecks();
+
+document.getElementById('btn-sync').addEventListener('click',()=>{
+  fetch(`${WORKER}/land/scan`,{method:'POST',headers:hdrs(),body:'{}'}).then(r=>r.text()).then(t=>alert(t)).catch(e=>alert(e));
+});
+document.getElementById('btn-audit').addEventListener('click',()=>{
+  fetch(`${WORKER}/land/summary`,{method:'POST',headers:hdrs(),body:'{}'}).then(r=>r.text()).then(t=>alert(t)).catch(e=>alert(e));
 });
 </script>
-<style>
-  .card{padding:10px;margin:6px;border:1px solid #ccc;}
-  .card.ok{background:#c7f5d9;}
-  .card.fail{background:#f5c7c7;}
-  .next{font-size:0.9em;margin-top:4px;}
-</style>
 </body>
 </html>
