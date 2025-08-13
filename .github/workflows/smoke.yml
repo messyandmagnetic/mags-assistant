@@ -1,0 +1,39 @@
+name: smoke
+on:
+  pull_request:
+    branches: [ main ]
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+
+      - name: Get preview URL from Vercel (best effort)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+        run: |
+          node scripts/get-preview-url.mjs || true
+          URL="$(cat preview_url.txt 2>/dev/null || true)"
+          if [ -z "$URL" ]; then
+            echo "No preview URL found — falling back to production." | tee -a $GITHUB_STEP_SUMMARY
+            URL="https://mags-assistant.vercel.app"
+          fi
+          echo "URL=$URL" >> $GITHUB_ENV
+          echo "Using URL: $URL" | tee -a $GITHUB_STEP_SUMMARY
+
+      - name: Smoke test /api/ping
+        run: |
+          set -euxo pipefail
+          curl -fsS --retry 5 --retry-connrefused --max-time 15 "$URL/api/ping"
+
+      - name: Show homepage (non-fatal)
+        continue-on-error: true
+        run: |
+          curl -fsS --max-time 10 "$URL" >/dev/null || true
