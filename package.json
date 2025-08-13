@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo \"static + api\"",
+    "build": "tsc -p . || echo \"no build step\"",
+    "lint": "echo \"skip\"",
     "start": "node server.js || echo \"Using Vercel serverless\"",
     "test": "node -e \"console.log('no tests')\"",
     "trends": "tsx scripts/trends.ts",
@@ -14,9 +15,14 @@
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
-    "openai": "^4.0.0",
-    "stripe": "^14.0.0",
+    "debug": "^4.4.1",
+    "google-auth-library": "^9.15.1",
     "googleapis": "^131.0.0",
-    "raw-body": "^2.5.2"
-  }
+    "openai": "^4.0.0",
+    "raw-body": "^2.5.2",
+    "stripe": "^14.0.0",
+    "uuid": "^9.0.1"
+  },
+  "engines": { "node": "20.x" },
+  "packageManager": "npm@10.8.2"
 }
