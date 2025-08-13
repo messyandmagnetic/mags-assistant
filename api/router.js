@@ -230,6 +230,7 @@ async function handleTelegramCommand(text) {
   let reply = null;
   if (text === '/ping') reply = 'pong \u2705';
   if (text === '/status') reply = 'ok';
+  if (text === '/help') reply = 'commands: /ping /help /sync /audit';
   if (text === '/scan') {
     try {
       await fetch(`${process.env.API_BASE || ''}/api/router?action=gmail_scan`, { method: 'POST' });
@@ -242,6 +243,22 @@ async function handleTelegramCommand(text) {
       await fetch(`${process.env.API_BASE || ''}/api/router?action=cron_digest`, { method: 'POST' });
     } catch {}
     reply = 'digest queued';
+  }
+  if (text === '/sync') {
+    try {
+      await fetch(`${process.env.API_BASE || ''}/api/commands/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: 'stripe.syncFromTracker' }),
+      });
+    } catch {}
+    reply = 'sync queued';
+  }
+  if (text === '/audit') {
+    try {
+      await fetch(`${process.env.API_BASE || ''}/api/router?action=stripe_audit`);
+    } catch {}
+    reply = 'audit queued';
   }
   if (text === '/pause') {
     paused = true;
