@@ -1,14 +1,9 @@
 {
-  "rewrites": [
-    { "source": "/check", "destination": "/check.html" },
-    { "source": "/api/stripe-webhook", "destination": "/api/ops?action=stripe-webhook" }
-  ],
-  "headers": [
-    {
-      "source": "/(.*)",
-      "headers": [
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" }
-      ]
-    }
+  "version": 2,
+  "functions": {
+    "api/_ping.ts": { "runtime": "nodejs20.x", "maxDuration": 10 }
+  },
+  "routes": [
+    { "src": "^/api/_ping$", "dest": "api/_ping.ts" }
   ]
 }
