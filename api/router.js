@@ -31,6 +31,9 @@ import { createSpreadsheet, addSheet, appendRows, getDrive } from '../lib/google
 import crypto from 'crypto';
 import { log as logEntry } from '../lib/logger.js';
 import { enqueueNewVideos, handleApprove, handleDecline, autoApproveOld } from '../lib/drive-watcher.js';
+import { ensureProfileDb } from '../lib/notion_profile.js';
+
+export const config = { api: { bodyParser: false } };
 
 // guardrail state
 const rateLimit = new Map(); // ip -> {count, ts}
@@ -75,8 +78,10 @@ function checkCron(req) {
 async function readJson(req) {
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
+  const raw = Buffer.concat(chunks);
+  req.rawBody = raw;
   try {
-    return JSON.parse(Buffer.concat(chunks).toString() || '{}');
+    return JSON.parse(raw.toString() || '{}');
   } catch {
     return {};
   }
@@ -99,11 +104,302 @@ async function getMasterSheet() {
   return r.data.files && r.data.files[0] ? r.data.files[0] : null;
 }
 
+// consolidated API handlers
+async function diag_health(req, res) {
+  ok(res, { time: new Date().toISOString() });
+}
+
+async function diag_notion(req, res) {
+  const next_steps = [];
+  if (!env.NOTION_TOKEN) {
+    next_steps.push('Set NOTION_TOKEN');
+    return res.json({ ok: false, reason: 'missing NOTION_TOKEN', next_steps });
+  }
+  const hq = env.NOTION_HQ_PAGE_ID;
+  if (!hq) {
+    next_steps.push('Set NOTION_HQ_PAGE_ID');
+    return res.json({ ok: false, reason: 'missing NOTION_HQ_PAGE_ID', next_steps });
+  }
+  try {
+    const profileDbId = await ensureProfileDb({ notion, hqPageId: hq });
+    let write = true;
+    try {
+      const page = await notion.pages.create({
+        parent: { database_id: profileDbId },
+        properties: {
+          Key: { title: [{ text: { content: 'diag-test' } }] },
+          Value: { rich_text: [{ text: { content: 'temp' } }] },
+        },
+      });
+      await notion.blocks.delete?.({ block_id: page.id }).catch(() =>
+        notion.pages.update({ page_id: page.id, archived: true })
+      );
+    } catch (e) {
+      write = false;
+      next_steps.push('Open the HQ page in Notion → ••• → Add connections → pick Maggie/Mags Assistant → Can edit. If a “Profile” DB exists, open it → ••• → Add connections → pick Maggie.');
+    }
+    return res.json({ ok: true, profileDbId, write, next_steps });
+  } catch (e) {
+    return res.json({ ok: false, reason: e.message, next_steps });
+  }
+}
+
+async function diag_stripe(req, res) {
+  const next_steps = [];
+  if (!env.STRIPE_SECRET_KEY) {
+    next_steps.push('Set STRIPE_SECRET_KEY');
+    return res.json({ ok: false, reason: 'missing STRIPE_SECRET_KEY', next_steps });
+  }
+  const stripe = getStripe();
+  try {
+    await stripe.balance.retrieve();
+    await stripe.products.list({ limit: 1 });
+  } catch (e) {
+    return res.json({ ok: false, reason: e.message, next_steps });
+  }
+  const webhookSet = !!env.STRIPE_WEBHOOK_SECRET;
+  if (!webhookSet) next_steps.push('Set STRIPE_WEBHOOK_SECRET');
+  res.json({ ok: true, webhook: webhookSet, next_steps });
+}
+
+async function diag_telegram(req, res) {
+  const next_steps = [];
+  if (!env.TELEGRAM_BOT_TOKEN) {
+    next_steps.push('Set TELEGRAM_BOT_TOKEN');
+    return res.json({ ok: false, reason: 'missing TELEGRAM_BOT_TOKEN', next_steps });
+  }
+  const url = new URL(req.url, 'http://x');
+  const send = url.searchParams.get('send') === 'true';
+  if (send) {
+    if (!env.TELEGRAM_CHAT_ID) {
+      next_steps.push('Set TELEGRAM_CHAT_ID');
+      return res.json({ ok: false, reason: 'missing TELEGRAM_CHAT_ID', next_steps });
+    }
+    try {
+      await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: 'diag ping' }),
+      });
+    } catch (e) {
+      return res.json({ ok: false, reason: e.message, next_steps });
+    }
+  }
+  res.json({ ok: true, sent: send });
+}
+
+async function diag_drive(req, res) {
+  const next_steps = [];
+  const email = process.env.GOOGLE_SERVICE_EMAIL;
+  const key = process.env.GOOGLE_PRIVATE_KEY;
+  if (!email || !key) {
+    next_steps.push('Set GOOGLE_SERVICE_EMAIL and GOOGLE_PRIVATE_KEY');
+    return res.json({ ok: false, reason: 'missing service account', next_steps });
+  }
+  try {
+    const drive = await getDrive();
+    await drive.files.list({ pageSize: 1, fields: 'files(id)' });
+    return res.json({ ok: true });
+  } catch (e) {
+    return res.json({ ok: false, reason: e.message, next_steps });
+  }
+}
+
+async function diag_cron(req, res) {
+  const secret = env.CRON_SECRET;
+  const next_steps = [];
+  if (!secret) {
+    next_steps.push('Set CRON_SECRET');
+    return res.json({ ok: false, reason: 'missing CRON_SECRET', next_steps });
+  }
+  const base = process.env.API_BASE || '';
+  const mk = (p) => `${base}/api/cron/${p}?secret=${secret}`;
+  res.json({
+    ok: true,
+    urls: {
+      daily: mk('daily'),
+      'stripe-poll': mk('stripe-poll'),
+      'gmail-scan': mk('gmail-scan'),
+    },
+  });
+}
+
+async function stripe_audit(req, res) {
+  const next_steps = [];
+  if (!env.STRIPE_SECRET_KEY) {
+    next_steps.push('Set STRIPE_SECRET_KEY');
+    return res.json({ ok: false, reason: 'missing STRIPE_SECRET_KEY', next_steps });
+  }
+  const stripe = getStripe();
+  try {
+    await stripe.prices.list({ limit: 1 });
+    res.json({ ok: true });
+  } catch (e) {
+    res.json({ ok: false, reason: e.message, next_steps });
+  }
+}
+
+async function stripe_webhook(req, res) {
+  if (req.method !== 'POST') return res.status(405).json({ ok: false });
+  const sig = req.headers['stripe-signature'];
+  const secret = env.STRIPE_WEBHOOK_SECRET;
+  if (!secret) return res.status(400).json({ ok: false, reason: 'no STRIPE_WEBHOOK_SECRET' });
+  const stripe = getStripe();
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.rawBody, sig, secret);
+  } catch (e) {
+    return res.status(400).json({ ok: false, reason: e.message });
+  }
+  switch (event.type) {
+    case 'checkout.session.completed':
+    case 'payment_intent.succeeded':
+      console.log('stripe event', event.type);
+      break;
+    default:
+      break;
+  }
+  res.json({ ok: true });
+}
+
+async function gmail_scan(req, res) {
+  const url = process.env.GMAIL_BRIDGE_URL;
+  const secret = process.env.APPS_SCRIPT_SECRET;
+  const next_steps = [];
+  if (!url || !secret) {
+    if (!url) next_steps.push('Set GMAIL_BRIDGE_URL');
+    if (!secret) next_steps.push('Set APPS_SCRIPT_SECRET');
+    return res.json({ ok: false, reason: 'missing bridge config', next_steps });
+  }
+  try {
+    const r = await fetch(`${url.replace(/\/$/, '')}/scan`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(req.body || {}),
+    });
+    const data = await r.json().catch(() => ({}));
+    res.json({ ok: r.ok, data });
+  } catch (e) {
+    res.json({ ok: false, reason: e.message, next_steps });
+  }
+}
+
+async function gmail_nudge(req, res) {
+  const url = process.env.GMAIL_BRIDGE_URL;
+  const secret = process.env.APPS_SCRIPT_SECRET;
+  const next_steps = [];
+  if (!url || !secret) {
+    if (!url) next_steps.push('Set GMAIL_BRIDGE_URL');
+    if (!secret) next_steps.push('Set APPS_SCRIPT_SECRET');
+    return res.json({ ok: false, reason: 'missing bridge config', next_steps });
+  }
+  try {
+    const r = await fetch(`${url.replace(/\/$/, '')}/nudge`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(req.body || {}),
+    });
+    const data = await r.json().catch(() => ({}));
+    res.json({ ok: r.ok, data });
+  } catch (e) {
+    res.json({ ok: false, reason: e.message, next_steps });
+  }
+}
+
+function cronAuth(url) {
+  return new URL(url, 'http://x').searchParams.get('secret') === env.CRON_SECRET;
+}
+
+async function cron_daily(req, res) {
+  if (!cronAuth(req.url)) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  ok(res);
+}
+
+async function cron_digest(req, res) {
+  if (!cronAuth(req.url)) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  const url = new URL(req.url, 'http://x');
+  const test = url.searchParams.get('test') === 'true';
+  if (env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+    try {
+      await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: env.TELEGRAM_CHAT_ID, text: `digest${test ? ' test' : ''}` }),
+      });
+    } catch {}
+  }
+  ok(res);
+}
+
+async function cron_stripe_poll(req, res) {
+  if (!cronAuth(req.url)) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  ok(res);
+}
+
+async function cron_gmail_scan(req, res) {
+  if (!cronAuth(req.url)) return res.status(401).json({ ok: false, reason: 'unauthorized' });
+  ok(res);
+}
+
+const actionMap = {
+  diag_health,
+  diag_notion,
+  diag_stripe,
+  diag_telegram,
+  diag_drive,
+  diag_cron,
+  stripe_audit,
+  stripe_webhook,
+  gmail_scan,
+  gmail_nudge,
+  cron_daily,
+  cron_digest,
+  cron_stripe_poll,
+  cron_gmail_scan,
+};
+
 export default async function handler(req, res) {
   const { method, url } = req;
   console.log(`${method} ${url}`);
   try {
-    const { pathname } = new URL(url, `http://${req.headers.host}`);
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !req.body) {
+      req.body = await readJson(req);
+    }
+    const parsed = new URL(url, `http://${req.headers.host}`);
+    let action =
+      parsed.searchParams.get('action') ||
+      (parsed.pathname.startsWith('/api/router/')
+        ? parsed.pathname.slice('/api/router/'.length)
+        : null);
+    if (!action) {
+      const pathActionMap = {
+        '/api/diag/health': 'diag_health',
+        '/api/diag/notion': 'diag_notion',
+        '/api/diag/stripe': 'diag_stripe',
+        '/api/diag/telegram': 'diag_telegram',
+        '/api/diag/drive': 'diag_drive',
+        '/api/diag/cron': 'diag_cron',
+        '/api/stripe/audit': 'stripe_audit',
+        '/api/stripe/webhook': 'stripe_webhook',
+        '/api/gmail/scan': 'gmail_scan',
+        '/api/gmail/nudge': 'gmail_nudge',
+        '/api/cron/daily': 'cron_daily',
+        '/api/cron/digest': 'cron_digest',
+        '/api/cron/stripe-poll': 'cron_stripe_poll',
+        '/api/cron/gmail-scan': 'cron_gmail_scan',
+      };
+      action = pathActionMap[parsed.pathname];
+    }
+    if (action && actionMap[action]) {
+      return await actionMap[action](req, res);
+    }
+    const { pathname } = parsed;
 
     // dynamic modules for new api routes
     if (pathname.startsWith('/api/diag/')) {
