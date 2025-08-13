@@ -2,9 +2,12 @@
   "name": "mags-assistant",
   "private": true,
   "type": "module",
+  "engines": { "node": "20.x" },
+  "packageManager": "npm@10.7.0",
   "scripts": {
-    "build": "echo \"static + api\"",
-    "start": "node server.js || echo \"Using Vercel serverless\"",
+    "build": "echo \"nothing to build for api routes\"",
+    "start": "node server.js || echo \"use vercel dev\"",
+    "dev": "vercel dev",
     "test": "node -e \"console.log('no tests')\"",
     "trends": "tsx scripts/trends.ts",
     "link-check": "tsx scripts/link_check.ts",
@@ -17,6 +20,8 @@
     "openai": "^4.0.0",
     "stripe": "^14.0.0",
     "googleapis": "^131.0.0",
-    "raw-body": "^2.5.2"
+    "raw-body": "^2.5.2",
+    "@vercel/node": "^3.2.0",
+    "google-auth-library": "^9.15.1"
   }
 }

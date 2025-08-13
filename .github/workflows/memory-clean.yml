@@ -15,5 +15,12 @@ jobs:
       GITHUB_REPOSITORY: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+      - name: Install deps
+        run: |
+          npm ci || npm install
       - name: Compact memory DB
         run: npx tsx scripts/memory/compact.ts
