@@ -1,19 +1,18 @@
 // Single multipurpose API to keep function count under 12
-import type { VercelRequest, VercelResponse } from '@vercel/node'
 import getRawBody from 'raw-body'
 
 export const config = {
   api: { bodyParser: false } // needed for Stripe signature verification
 }
 
-function ok(res: VercelResponse, data: any = {}) {
+function ok(res: any, data: any = {}) {
   res.status(200).json({ ok: true, ...data })
 }
-function bad(res: VercelResponse, msg: string, code = 400) {
+function bad(res: any, msg: string, code = 400) {
   res.status(code).json({ ok: false, error: msg })
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export default async function handler(req: any, res: any) {
   const action = (req.query.action as string) || 'status'
 
   try {
