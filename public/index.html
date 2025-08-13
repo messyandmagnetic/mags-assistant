@@ -1,70 +1,16 @@
 <!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Mags Assistant</title>
-  <link rel="stylesheet" href="/brand.css">
-</head>
-<body>
-<div class="container">
-  <h1>✅ Mags Assistant</h1>
-  <div class="card">
-    <h2>Quick checks</h2>
-    <div class="button-row">
-      <a class="button rose" href="/api/hello">/api/hello</a>
-      <a class="button lav" href="/api/rpa/health">/api/rpa/health</a>
-      <a class="button sage" href="/api/rpa/diag">/api/rpa/diag</a>
-      <a class="button" data-ping href="/api/notion/diag">/api/notion/diag</a>
-      <a class="button" data-ping href="/api/cron/tick?dry=1">/api/cron/tick?dry=1</a>
-      <a class="button" href="/watch">Viewer</a>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Start</h2>
-    <form id="watchForm">
-      <input id="url" type="url" placeholder="https://example.com" required>
-      <button class="button">Start</button>
-    </form>
-    <p id="msg" data-test="result"></p>
-  </div>
-
-  <div class="card">
-    <h2>Tools</h2>
-    <div class="button-row">
-      <a class="button" href="/studio">Studio</a>
-      <a class="button" href="/planner">Planner</a>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Chat with Assistant</h2>
-    <p>Ask questions, get updates, and manage tasks through your AI assistant.</p>
-    <a class="button" href="/chat">
-      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" style="width:24px;height:24px;vertical-align:middle;margin-right:4px">
-        <path stroke-linecap="round" stroke-linejoin="round" d="M2.25 15a2.25 2.25 0 002.25 2.25h3L9 21l3-3h5.25A2.25 2.25 0 0019.5 15V6.75A2.25 2.25 0 0017.25 4.5h-12A2.25 2.25 0 003 6.75V15z" />
-      </svg>
-      Open Chat
-    </a>
-  </div>
-</div>
-<script>
-(function(){
-  async function ping(btn){
-    try {
-      const r = await fetch(btn.getAttribute('href'));
-      const j = await r.json().catch(() => ({}));
-      if (j.ok) {
-        btn.classList.add('sage');
-        btn.style.background = 'var(--sage)';
-        btn.style.color = '#fff';
-      }
-    } catch {}
-  }
-  document.querySelectorAll('[data-ping]').forEach(ping);
-})();
-</script>
-<script src="/watch.js"></script>
-</body>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Mags Assistant</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>body{font:16px/1.5 system-ui, sans-serif;max-width:720px;margin:5rem auto;padding:0 1rem}</style>
+  </head>
+  <body>
+    <h1>✅ Mags is online</h1>
+    <p>This is a static deploy placeholder. API/automations run on Cloudflare Worker.</p>
+    <ul>
+      <li><a href="/check">Status Check (will route to index for now)</a></li>
+    </ul>
+  </body>
 </html>
