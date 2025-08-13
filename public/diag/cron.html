@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Cron URLs</title>
+</head>
+<body>
+  <h1>Cron URLs</h1>
+  <pre id="out">loading...</pre>
+  <script>
+    fetch('/api/diag/cron')
+      .then((r) => r.json())
+      .then((d) => {
+        const el = document.getElementById('out');
+        if (d.ok && d.urls) {
+          let txt = '';
+          for (const [k, v] of Object.entries(d.urls)) {
+            txt += `${k}: ${v}\n`;
+          }
+          el.textContent = txt;
+        } else {
+          el.textContent = JSON.stringify(d, null, 2);
+        }
+      })
+      .catch((e) => {
+        document.getElementById('out').textContent = e.message;
+      });
+  </script>
+</body>
+</html>
