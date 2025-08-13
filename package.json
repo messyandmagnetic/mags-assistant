@@ -12,6 +12,7 @@
     "social:health": "tsx scripts/social_health.ts",
     "social:self-test": "tsx scripts/connectivity_self_test.ts"
   },
+  "engines": { "node": ">=20" },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
     "openai": "^4.0.0",
