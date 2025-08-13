@@ -1,0 +1,36 @@
+{
+  "profile": {
+    "name": "Mags",
+    "owner": "Chanel Marraccini",
+    "brand": "Messy & Magnetic",
+    "contact": {
+      "phone": "505-249-1419",
+      "email": "YOUR_EMAIL_HERE"
+    }
+  },
+  "content_defaults": {
+    "platforms": ["tiktok","reels","shorts"],
+    "language": "en",
+    "tone": ["warm","direct","playful"],
+    "cta_variants": [
+      "Follow for the build-out journey",
+      "Tap + save for later",
+      "DM “LAND” for details"
+    ]
+  },
+  "lending_packet": {
+    "borrowers": {
+      "primary": {"name": "Chanel Marraccini", "phone": "505-249-1419", "email": "YOUR_EMAIL_HERE"},
+      "co": {"name": "Eddie Marraccini", "phone": "505-249-1419", "email": "YOUR_EMAIL_HERE"}
+    },
+    "properties": [
+      {"address":"9800 San Gabriel Rd NE, Albuquerque, NM 87111","balance":172000,"est_value":446800},
+      {"address":"9308 Claremont Ave NE, Albuquerque, NM 87112","balance":79000,"est_value":259000}
+    ],
+    "loan_preferences": {
+      "products_ranked":["HEL_fixed","HELOC_variable"],
+      "combine_properties": true,
+      "purpose_text": "Purchase undeveloped land in Coyote, NM, and fund initial infrastructure for a small agricultural/community project. Family-owned; repayment from wage income and project revenue."
+    }
+  }
+}
