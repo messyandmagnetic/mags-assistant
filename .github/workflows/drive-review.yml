@@ -1,13 +1,29 @@
 name: Drive Review Ping
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/30 * * * *"
   workflow_dispatch:
+
+env:
+  WORKFLOW_BASE_URL: ${{ secrets.PROD_URL || vars.PROD_URL || 'https://mags-assistant.vercel.app' }}
+
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
-      - name: Call Vercel endpoint
+      - name: Show URL
+        run: echo "Hitting $WORKFLOW_BASE_URL"
+
+      - name: Try /api/ping
+        id: ping_api
+        continue-on-error: true
         run: |
-          curl -fsS "https://assistant.messyandmagnetic.com/api/drive/review?token=${{ secrets.CRON_SECRET }}"
+          set -euxo pipefail
+          curl -fsS -w "\nSTATUS:%{http_code}\n" "$WORKFLOW_BASE_URL/api/ping"
+
+      - name: Fallback /ping.txt
+        if: steps.ping_api.outcome != 'success'
+        run: |
+          set -euxo pipefail
+          curl -fsS -w "\nSTATUS:%{http_code}\n" "$WORKFLOW_BASE_URL/ping.txt"
 

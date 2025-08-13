@@ -1,5 +1,12 @@
-export const runtime = 'nodejs';
-
 export async function GET() {
-  return Response.json({ ok: true });
+  return new Response(
+    JSON.stringify({ ok: true, ts: new Date().toISOString() }),
+    {
+      status: 200,
+      headers: {
+        'content-type': 'application/json',
+        'cache-control': 'no-store',
+      },
+    },
+  );
 }
