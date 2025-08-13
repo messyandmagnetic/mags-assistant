@@ -3,14 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo \"static + api\"",
-    "start": "node server.js || echo \"Using Vercel serverless\"",
-    "test": "node -e \"console.log('no tests')\"",
-    "trends": "tsx scripts/trends.ts",
-    "link-check": "tsx scripts/link_check.ts",
-    "memory:compact": "tsx scripts/memory/compact.ts",
-    "social:health": "tsx scripts/social_health.ts",
-    "social:self-test": "tsx scripts/connectivity_self_test.ts"
+    "build": "echo \"no build step\"",
+    "start": "node server.js || echo \"api/static only\""
+  },
+  "engines": {
+    "node": "22.x"
   },
   "dependencies": {
     "@notionhq/client": "^2.2.15",
