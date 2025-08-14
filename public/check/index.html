@@ -1,42 +1,56 @@
 <!doctype html>
-<html lang="en">
+<html>
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>System Check</title>
-  <link rel="stylesheet" href="/brand.css" />
   <style>
-    a.pill{display:inline-block;padding:4px 8px;margin:4px;border-radius:9999px;background:#eee;text-decoration:none;color:#000}
-    div.status{margin-top:4px}
+    .pill{display:inline-block;padding:.35rem .6rem;border-radius:999px;margin:.25rem;background:#eee}
+    .ok{background:#d1fae5} .fail{background:#fee2e2}
+    small{color:#666;margin-left:.4rem}
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>System Check</h1>
-    <div>
-      <a class="pill" id="vercel-link" href="https://mags-assistant.vercel.app/health" target="_blank">Vercel API</a>
-      <div id="vercel-status" class="status"></div>
-    </div>
-    <div>
-      <a class="pill" id="worker-link" href="https://tight-snow-2840.messyandmagnetic.workers.dev" target="_blank">Worker</a>
-      <div id="worker-status" class="status"></div>
-    </div>
-  </div>
-  <script>
-    async function check(id, url){
-      const el=document.getElementById(id);
-      try{
-        const res=await fetch(url);
-        const ok=res.ok?'OK':'FAIL';
-        el.textContent=`${ok} ${res.status}`;
-        el.style.color=res.ok?'green':'red';
-      }catch(e){
-        el.textContent='FAIL';
-        el.style.color='red';
-      }
+  <h1>System Check</h1>
+  <div id="vercel" class="pill">Vercel API <small id="vercel-note"></small></div>
+  <div id="worker" class="pill">Worker <small id="worker-note"></small></div>
+
+<script>
+const targets = {
+  vercel: 'https://mags-assistant.vercel.app/health.json',
+  worker: 'https://tight-snow-2840.messyandmagnetic.workers.dev'
+};
+
+function badge(el, ok, note){ 
+  el.classList.remove('ok','fail'); 
+  el.classList.add(ok?'ok':'fail'); 
+  el.querySelector('small').textContent = note; 
+}
+
+async function probe(name, url){
+  const el = document.getElementById(name);
+  const ctl = new AbortController();
+  const t = setTimeout(()=>ctl.abort(), 6000);
+  try{
+    const res = await fetch(url, {signal: ctl.signal, headers:{'cache-control':'no-cache'}});
+    const code = res.status || 0;
+    // Try to parse JSON if it looks like our health.json
+    let ok = res.ok;
+    let note = `HTTP ${code}`;
+    if (name==='vercel' && res.ok){
+      try { 
+        const j = await res.clone().json();
+        ok = j && j.ok === true;
+          note = `${note}${ok?' ✓':''}`;
+      } catch {}
     }
-    check('vercel-status','https://mags-assistant.vercel.app/health');
-    check('worker-status','https://tight-snow-2840.messyandmagnetic.workers.dev');
-  </script>
+    badge(el, ok, note);
+  }catch(e){
+    badge(el, false, (e.name==='AbortError'?'timeout':'no connection'));
+  }finally{ clearTimeout(t); }
+}
+
+probe('vercel', targets.vercel);
+probe('worker', targets.worker);
+</script>
 </body>
 </html>
