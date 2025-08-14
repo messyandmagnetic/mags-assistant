@@ -13,11 +13,25 @@ jobs:
       NOTION_DB_TRENDS: ${{ secrets.NOTION_DB_TRENDS }}
       WORKER_URL: ${{ secrets.WORKER_URL }}
     steps:
+      - name: Check dependencies
+        id: deps
+        run: |
+          missing=""
+          [ -z "$NOTION_DB_TRENDS" ] && missing="NOTION_DB_TRENDS"
+          [ -z "$WORKER_URL" ] && missing="$missing WORKER_URL"
+          if [ -n "$missing" ]; then
+            echo "Missing $missing; skipping trends." 
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/checkout@v4
+        if: steps.deps.outputs.ok == 'true'
       - name: Fetch trends
+        if: steps.deps.outputs.ok == 'true'
         run: npx tsx scripts/trends.ts
       - name: Notify failure
-        if: failure()
+        if: failure() && steps.deps.outputs.ok == 'true' && env.WORKER_URL != '' && startsWith(env.WORKER_URL, 'http')
         run: |
           curl -sS -X POST "$WORKER_URL/api/notify" \
             -H "content-type: application/json" \

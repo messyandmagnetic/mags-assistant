@@ -1,9 +1,24 @@
 name: Nightly analytics
 on:
   schedule: [{ cron: "15 7 * * *" }]
+  workflow_dispatch:
+
 jobs:
   run:
     runs-on: ubuntu-latest
+    env:
+      PROD_URL: ${{ secrets.PROD_URL }}
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
+      - name: Check PROD_URL
+        id: check
+        run: |
+          if [ -n "$PROD_URL" ] && curl -I -sS "$PROD_URL" | head -n 1 | grep -q "200"; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Prod URL missing or unreachable; skipping analyze."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Hit analyze endpoint
-        run: curl -fsS "${{ secrets.PROD_URL }}/api/social/analyze?token=${{ secrets.CRON_SECRET }}"
+        if: steps.check.outputs.ok == 'true'
+        run: curl -fsS "$PROD_URL/api/social/analyze?token=$CRON_SECRET"
