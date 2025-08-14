@@ -5,15 +5,21 @@ jobs:
   health:
     runs-on: ubuntu-latest
     steps:
+      - name: Status page
+        env:
+          SITE: ${{ secrets.PROD_URL }}
+        run: |
+          if [ -z "$SITE" ]; then echo "missing PROD_URL, skipping"; exit 0; fi
+          curl -fsS "$SITE/check"
       - name: Worker health
         env:
           API_BASE: ${{ secrets.WORKER_URL }}
         run: |
-          if [ -z "$API_BASE" ]; then echo "missing API_BASE, skipping"; exit 0; fi
-          curl -sS "$API_BASE/health" || true
+          if [ -z "$API_BASE" ]; then echo "missing WORKER_URL, skipping"; exit 0; fi
+          curl -fsS "$API_BASE/health"
       - name: Apps Script health
         env:
           GAS_URL: ${{ secrets.GAS_INTAKE_URL }}
         run: |
-          if [ -z "$GAS_URL" ]; then echo "missing GAS_URL, skipping"; exit 0; fi
-          curl -sS "$GAS_URL?action=health" || true
+          if [ -z "$GAS_URL" ]; then echo "missing GAS_INTAKE_URL, skipping"; exit 0; fi
+          curl -fsS "$GAS_URL?action=health"

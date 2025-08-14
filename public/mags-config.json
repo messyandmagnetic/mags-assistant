@@ -182,7 +182,21 @@
   },
   "intake": {
     "quiz": { "sheet_id": "1JCcWIU7Mry540o3dpYlIvR0k4pjsGF743bG8vu8cds0", "tab": "Quiz_Responses" },
-    "feedback": { "sheet_id": "1DdqXoAdV-VQ565aHzJ9W0qsG5IJqpRBf7FE6-HkzZm8", "tab": "Feedback_Responses" }
+    "feedback": { "sheet_id": "1DdqXoAdV-VQ565aHzJ9W0qsG5IJqpRBf7FE6-HkzZm8", "tab": "Feedback_Responses" },
+    "tally": {
+      "forms": [
+        {
+          "form_id": "3qlZQ9",
+          "sheet_id": "1JCcWIU7Mry540o3dpYlIvR0k4pjsGF743bG8vu8cds0",
+          "tab": "Quiz_Responses"
+        },
+        {
+          "form_id": "nGPKDo",
+          "sheet_id": "1DdqXoAdV-VQ565aHzJ9W0qsG5IJqpRBf7FE6-HkzZm8",
+          "tab": "Feedback_Responses"
+        }
+      ]
+    }
   },
   "worker": {
     "base": "https://tight-snow-2840.messyandmagnetic.workers.dev",

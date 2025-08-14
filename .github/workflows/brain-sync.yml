@@ -1,18 +1,22 @@
 name: brain-sync
 on:
   workflow_dispatch:
+  schedule:
+    - cron: '13 7 * * *'
 jobs:
   sync:
     runs-on: ubuntu-latest
+    env:
+      GAS_INTAKE_URL: ${{ secrets.GAS_INTAKE_URL }}
+      GAS_READ_URL: ${{ secrets.GAS_READ_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - name: Brain Sync
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          QUIZ_SHEET_ID: 1JCcWIU7Mry540o3dpYlIvR0k4pjsGF743bG8vu8cds0
-          FEEDBACK_SHEET_ID: 1DdqXoAdV-VQ565aHzJ9W0qsG5IJqpRBf7FE6-HkzZm8
-        run: |
-          if [ -z "$NOTION_TOKEN" ] || [ -z "$GOOGLE_API_KEY" ]; then
-            echo "missing env, skipping"; exit 0; fi
-          node scripts/brain-sync.mjs
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20.x
+      - run: npm ci
+      - run: node scripts/brain-sync.mjs

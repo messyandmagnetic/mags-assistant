@@ -110,3 +110,17 @@ secret is configured the step is skipped.
 
 Tally webhooks remain configured to POST → Worker → Apps Script. No direct
 Tally → Apps Script hooks are enabled.
+
+## Tally/Sheets Intake
+
+The worker forwards raw Tally JSON to the Apps Script web app, which writes
+normalized rows (`timestamp, form_id, submission_id, email, full_name, phone,
+product_choice, score, result_tier, rating, feedback_text, source, user_agent,
+ip, raw_json`) into the target sheet and logs to a `Logs` tab. The brain sync
+workflow reads the latest rows via the `GAS_READ_URL` endpoint, summarizes the
+last 100 entries, and posts a compact summary to Telegram and the workflow log.
+
+To add a new form, append `{ "form_id": "<id>", "sheet_id": "<sheet>", "tab": "<tab>" }`
+to `intake.tally.forms` in `public/mags-config.json`. Test by sending a synthetic
+payload to the worker and confirming the row appears in the sheet and the `Logs`
+tab.

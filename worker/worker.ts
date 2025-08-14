@@ -80,6 +80,27 @@ export default {
       return handleTallyWebhook(req, env);
     }
 
+    if (req.method === 'POST' && p === '/tally/webhook') {
+      const gas = env.GAS_INTAKE_URL;
+      if (!gas) return bad('missing_gas_intake_url', 500);
+      const body = await req.text();
+      const headers = new Headers();
+      req.headers.forEach((v, k) => {
+        if (k === 'content-type' || k.startsWith('tally') || k.startsWith('x-tally')) {
+          headers.set(k, v);
+        }
+      });
+      try {
+        const r = await fetch(gas, { method: 'POST', body, headers });
+        const txt = await r.text();
+        console.log(`tally/webhook -> ${r.status}`);
+        return new Response(txt, { status: r.status });
+      } catch (err) {
+        console.log('tally/webhook_error');
+        return bad('forward_failed', 500);
+      }
+    }
+
     if (req.method === 'POST' && p === '/backfill') {
       return handleBackfill(req, env);
     }
