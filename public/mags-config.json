@@ -157,21 +157,32 @@
     "prod_url": "https://mags-assistant.vercel.app"
   },
   "brain": {
-    "sources": {
-      "notion": {
-        "pinned": [
-          "https://www.notion.so/MM-Site-Content-24a796c707c1808d8e59fb5b792e0fb8",
-          "https://www.notion.so/Mags-Task-Manager-24b796c707c18018a017c7b267a6bf61"
-        ]
+    "sources": [
+      {
+        "type": "notion_page",
+        "id": "24b796c7-07c1-8018-a017-c7b267a6bf61",
+        "name": "Mags Task Manager",
+        "priority": "high",
+        "visibility": "shareable"
+      },
+      {
+        "type": "notion_page",
+        "id": "24a796c7-07c1-808d-8e59-fb5b792e0fb8",
+        "name": "MM Site Content",
+        "priority": "high",
+        "visibility": "shareable"
       }
-    },
+    ],
     "sync": {
       "rules": {
         "whitelist": [
           "https://www.notion.so/MM-Site-Content-24a796c707c1808d8e59fb5b792e0fb8",
           "https://www.notion.so/Mags-Task-Manager-24b796c707c18018a017c7b267a6bf61"
         ]
-      }
+      },
+      "enable_periodic_sync": true,
+      "sync_strategy": "pull",
+      "max_tokens_per_doc": 16000
     },
     "status": {
       "last_sync": null,
