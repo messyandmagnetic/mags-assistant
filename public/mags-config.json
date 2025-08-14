@@ -1,16 +1,19 @@
 {
+  "version": 3,
+  "updated_at": "2025-08-13T00:00:00Z",
+
   "project": {
     "owner": "messyandmagnetic",
     "repo": "mags-assistant",
     "deployment": {
       "platform": "vercel",
       "prod_url": "https://mags-assistant.vercel.app",
+      "node_policy": "20.x (project settings, do not override to 22.x)",
       "vercel_json": {
         "$schema": "https://openapi.vercel.sh/vercel.json",
         "version": 2,
         "cleanUrls": true
-      },
-      "node_policy": "20.x (project settings) — do not override with 22.x"
+      }
     },
     "code_layout": {
       "static_site": true,
@@ -23,29 +26,93 @@
       ]
     }
   },
-  "github_actions": {
-    "workflows": [
-      "cron-runner.yml",
-      "drive-review.yml",
-      "health-check.yml",
-      "nightly-analytics.yml",
-      "nightly-trends.yml",
-      "preview-check.yml",
-      "smoke.yml",
-      "housekeeping.yml",
-      "memory-clean.yml",
-      "link-check.yml",
-      "ops-fallback.yml",
-      "post-windows.yml",
-      "stripe-sync.yml"
-    ],
-    "policy": {
-      "dispatchable": true,
-      "default_branch": "main",
-      "required_permissions": ["contents:write", "pull_requests:write", "actions:read"]
+
+  "endpoints": {
+    "status_page": "/check",
+    "health": "/health",
+    "echo": "/api/echo"  // may be served by Cloudflare Worker; GitHub workflows should skip if API_BASE is empty
+  },
+
+  "cloudflare": {
+    "worker_url": "https://tight-snow-2840.messyandmagnetic.workers.dev",
+    "cron": {
+      "enabled": true,
+      "hourly": "/cron/hourly",
+      "nightly": "/cron/nightly"
     }
   },
-  "secrets": {
+
+  "ops": {
+    "status_reporting": {
+      "enabled": true,
+      "channels": ["GitHub PR comments", "Telegram"]
+    },
+    "telegram": {
+      "enabled": true,
+      "bot_token_secret": "TELEGRAM_BOT_TOKEN",
+      "chat_id_secret": "TELEGRAM_CHAT_ID",
+      "prefix": "[Mags]"
+    }
+  },
+
+  "integrations": {
+    "openai": {
+      "api_key_secret": "OPENAI_API_KEY",
+      "model": "gpt-4o-mini"
+    },
+    "notion": {
+      "token_secret": "NOTION_TOKEN",
+      "hq_page_id": "NOTION_HQ_PAGE_ID",              // ← add in repo secrets when you have it
+      "databases": {
+        "tracker": "NOTION_DB_TRACKER",               // leads / lenders / donors
+        "donors": "NOTION_DB_DONORS",
+        "trends": "NOTION_DB_TRENDS"
+      }
+    },
+    "stripe": {
+      "secret_key_secret": "STRIPE_SECRET_KEY",
+      "webhook_secret_secret": "STRIPE_WEBHOOK_SECRET",
+      "mode": "live",
+      "products_expected": [
+        "General Donations",
+        "$250 Filing Donation"
+      ]
+    },
+    "tally": {
+      "webhook_base": "/api/tally",                   // handled by Worker
+      "forms": [
+        {
+          "name": "MM Intake (main quiz)",
+          "id": "nGPKDo",
+          "webhook_secret_env": "TALLY_WEBHOOK_SECRET_NGPKDO"
+        },
+        {
+          "name": "MM Feedback",
+          "id": "3qlZQ9",
+          "webhook_secret_env": "TALLY_WEBHOOK_SECRET_3QLZQ9"
+        }
+      ]
+    },
+    "resend": {
+      "api_key_secret": "RESEND_API_KEY",
+      "from_default": "hello@messyandmagnetic.com"
+    },
+    "gmail": {
+      "apps_script_bridge": true,
+      "label_primary": "Land Outreach",
+      "fallback_label": "Coyote Land"
+    },
+    "google": {
+      "service_account_email": "mm-bot@mm-automation-468718.iam.gserviceaccount.com",
+      "drive_roots": {
+        "mm_parent": "1xDmWU4OWf9ujyHaprTbHZvdtB8dAHUsH",
+        "chancub_parent": "1FsznybDD9T-RUzJHGKEA6qdczAc8lDhk",
+        "social_media_hub": "1ebD1-EvQgOIV5ip9w9eSejBtYjpRPBd6"
+      }
+    }
+  },
+
+  "secrets_registry": {
     "present": [
       "API_BASE",
       "CRON_SECRET",
@@ -59,39 +126,81 @@
       "VERCEL_PROD_URL",
       "VERCEL_PROJECT_ID",
       "VERCEL_TOKEN",
-      "WORKER_KEY"
+      "WORKER_KEY",
+      "STRIPE_SECRET_KEY",
+      "STRIPE_WEBHOOK_SECRET",
+      "RESEND_API_KEY",
+      "GOOGLE_CLIENT_EMAIL",
+      "GOOGLE_PRIVATE_KEY_P1",
+      "GOOGLE_PRIVATE_KEY_P2",
+      "GOOGLE_PRIVATE_KEY_P3",
+      "GOOGLE_PRIVATE_KEY_P4",
+      "TALLY_WEBHOOK_SECRET_NGPKDO",
+      "TALLY_WEBHOOK_SECRET_3QLZQ9"
     ],
-    "maybe_missing": [
-      "WORKER_URL",
-      "NOTION_DB_TRENDS"
+    "optional": [
+      "WORKER_URL",             // if Actions need to call Worker directly; otherwise pulled from config
+      "NOTION_DB_TRENDS",       // if separate from HQ_DATABASE_ID/Tracker
+      "GMAIL_BRIDGE_URL"        // if you expose your Apps Script endpoint
     ],
-    "notes": {
-      "API_BASE": "Leave blank or point to your worker only if you actually serve API there. Static site = do NOT call it.",
-      "USE_GH_CRON": "Set to 'true' to let GitHub Actions run scheduled jobs; 'false' if Cloudflare/Vercel crons are used.",
-      "WORKER_URL": "Your Cloudflare Worker base like https://tight-snow-2840.messyandmagnetic.workers.dev (optional)."
+    "policy": {
+      "use_github_cron": "USE_GH_CRON=true enables Actions schedules; otherwise rely on Cloudflare cron.",
+      "skip_if_missing": true
     }
   },
+
   "guard_rails": {
     "vercel_json_rules": [
-      "No legacy `now-*` runtimes",
-      "No `framework` key (Vercel auto-detect)",
-      "If you add rewrites/redirects/headers/cleanUrls/trailingSlash then do NOT include `routes`"
+      "No legacy now-* runtimes anywhere",
+      "No framework key (auto-detect only)",
+      "If rewrites/redirects/headers/cleanUrls/trailingSlash are used, do NOT include routes"
     ],
     "actions_rules": [
-      "Workflows that POST to /api/* must be gated because site is static",
-      "If API_BASE is empty or not reachable, skip those jobs instead of failing"
+      "Any job that POSTs to /api/* must check API_BASE first and skip if unreachable",
+      "Status jobs must not fail the build; they only comment/report"
     ]
   },
-  "ops": {
-    "telegram": {
+
+  "pipelines": {
+    "nightly": {
       "enabled": true,
-      "bot_token_secret": "TELEGRAM_BOT_TOKEN",
-      "chat_id_secret": "TELEGRAM_CHAT_ID",
-      "default_prefix": "[Mags]"
+      "cron_source": "github_or_cloudflare",
+      "tasks": [
+        "stripe.audit_products_and_links",
+        "gmail.scan_and_update_tracker",
+        "donors.rollup_and_budget_pdf",
+        "status.daily_digest_to_telegram"
+      ]
     },
-    "status_reporting": {
+    "hourly": {
       "enabled": true,
-      "channels": ["GitHub PR comments", "Telegram (if configured)"]
+      "cron_source": "github_or_cloudflare",
+      "tasks": [
+        "stripe.poll_new_payments",
+        "links.recheck_health",
+        "memory.compact_notes"
+      ]
+    }
+  },
+
+  "mags_brain": {
+    "persona": "Maggie (Mags): operator assistant for Messy & Magnetic",
+    "goals": [
+      "Secure Coyote property via donations or bridge financing",
+      "Keep donor and lender pipelines moving with minimal manual clicks",
+      "Maintain clean content workflows (Drive → edits → exported assets)"
+    ],
+    "context_sources": [
+      "Notion HQ page + DBs",
+      "Drive social_media_hub",
+      "Stripe products/links",
+      "Tally forms nGPKDo / 3qlZQ9",
+      "Gmail labels: Land Outreach, Coyote Land"
+    ],
+    "behaviors": {
+      "never_double_send": true,
+      "summarize_to_telegram": true,
+      "skip_if_secret_missing": true
     }
   }
 }
