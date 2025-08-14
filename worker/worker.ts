@@ -60,11 +60,16 @@ export default {
 
     // GET /health
     if (req.method === 'GET' && p === '/health') {
-      return json(200, {
-        ok: true,
-        target: 'gas',
-        hasSecret: !!env.GAS_INTAKE_URL,
-      });
+      let gas: number | string = 'missing';
+      if (env.GAS_INTAKE_URL) {
+        try {
+          const r = await fetch(env.GAS_INTAKE_URL + '?action=health');
+          gas = r.ok ? 200 : r.status;
+        } catch (err) {
+          gas = 'error';
+        }
+      }
+      return json(200, { ok: gas === 200, upstreams: { gas } });
     }
 
     if (req.method === 'GET' && p === '/tally/test') {
@@ -118,6 +123,11 @@ export default {
           filing250: !!links.filing250,
         };
         return ok({ links, completeness });
+      }
+
+      // POST /brain/sync
+      if (p === '/brain/sync') {
+        return ok({ triggered: false, reason: 'not_configured' });
       }
 
       // POST /digest — send a tiny status to Telegram if configured

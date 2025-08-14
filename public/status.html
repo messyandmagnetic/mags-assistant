@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Maggie Status</title>
+</head>
+<body>
+  <p id="brain">Brain: checking...</p>
+  <script>
+    fetch('/mags-config.json')
+      .then(r => r.json())
+      .then(cfg => {
+        const ok = cfg && cfg.notion_brain && cfg.intake;
+        document.getElementById('brain').textContent = ok ? 'Brain: OK' : 'Brain: missing';
+      })
+      .catch(() => {
+        document.getElementById('brain').textContent = 'Brain: error';
+      });
+  </script>
+</body>
+</html>

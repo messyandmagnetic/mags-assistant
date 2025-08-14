@@ -155,5 +155,46 @@
   },
   "deployment": {
     "prod_url": "https://mags-assistant.vercel.app"
+  },
+  "notion_brain": {
+    "url": "https://www.notion.so/Mags-Task-Manager-24b796c707c18018a017c7b267a6bf61",
+    "id": "24b796c707c18018a017c7b267a6bf61",
+    "properties": {
+      "title": "Item",
+      "type": "Type",
+      "submission_id": "Submission ID",
+      "form_id": "Form ID",
+      "email": "Email",
+      "name": "Name",
+      "phone": "Phone",
+      "score": "Score",
+      "result_tier": "Result Tier",
+      "product_choice": "Product Choice",
+      "status": "Status",
+      "stripe_link": "Stripe Link",
+      "notes": "Notes",
+      "created_at": "Created At",
+      "updated_at": "Updated At",
+      "raw": "Raw",
+      "source": "Source",
+      "owner": "Owner"
+    }
+  },
+  "intake": {
+    "quiz": { "sheet_id": "1JCcWIU7Mry540o3dpYlIvR0k4pjsGF743bG8vu8cds0", "tab": "Quiz_Responses" },
+    "feedback": { "sheet_id": "1DdqXoAdV-VQ565aHzJ9W0qsG5IJqpRBf7FE6-HkzZm8", "tab": "Feedback_Responses" }
+  },
+  "worker": {
+    "base": "https://tight-snow-2840.messyandmagnetic.workers.dev",
+    "health": "/health",
+    "brain_sync": "/brain/sync"
+  },
+  "tally": { "quiz": "3qlZQ9", "feedback": "nGPKDo" },
+  "stripe": {
+    "links_live": false,
+    "products": {
+      "general_donation": "",
+      "filing_donation_250": ""
+    }
   }
 }

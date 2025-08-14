@@ -1,0 +1,14 @@
+name: stripe-audit
+on:
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    env:
+      API_BASE: ${{ secrets.WORKER_URL }}
+      FETCH_PASS: ${{ secrets.WORKER_KEY }}
+    steps:
+      - name: Worker Stripe Audit
+        run: |
+          if [ -z "$API_BASE" ]; then echo "missing API_BASE, skipping"; exit 0; fi
+          curl -sS -X POST "$API_BASE/stripe/audit" -H "X-Fetch-Pass: $FETCH_PASS" || true
