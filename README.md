@@ -36,6 +36,19 @@ curl -i -X POST -H "X-Fetch-Pass: $FETCH_PASS" https://tight-snow-2840.messyandm
   -d '{"thread":{"from":"Donor","summary":"Interested in conservation work","goal":"Secure pledge"}}' -H "Content-Type: application/json"
 ```
 
+## Tally → Sheets pipeline
+
+Apps Script Web App URL is stored as `GAS_INTAKE_URL` (GitHub secret and Worker secret). Optional `TALLY_WEBHOOK_SECRET` enables HMAC verification of incoming payloads.
+
+Where to point Tally webhooks:
+
+- Preferred: Tally → Worker → `GAS_INTAKE_URL` (forwards raw body + headers)
+- Direct: Tally → `GAS_INTAKE_URL` (disable Worker forwarding to avoid double writes)
+
+Backfill: provide `TALLY_API_KEY` and run the **Backfill Tally** sheet menu or trigger the `tally-backfill` GitHub Action.
+
+Docs: [Apps Script deploy](docs/apps-script-deploy.md) · [Sheet details](docs/tally-sheets.md) · [Curl tests](docs/tally-tests.md)
+
 ### Cloudflare Cron
 
 Example schedules (configure in Cloudflare Dashboard):
