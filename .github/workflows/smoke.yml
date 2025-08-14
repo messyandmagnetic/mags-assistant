@@ -118,3 +118,9 @@ jobs:
           fi
           echo "Pinging: $URL/api/ping"
           curl -sSf "$URL/api/ping" | tee /dev/stdout
+      - name: Notify failure
+        if: failure() && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scripts/notify.ts "❌ smoke failed: $GITHUB_RUN_ID"

@@ -7,7 +7,7 @@ on:
 
 jobs:
   run:
-    if: env.USE_GH_CRON == 'true'
+    if: env.USE_GH_CRON == 'true' && env.API_BASE != '' && startsWith(env.API_BASE, 'http')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
