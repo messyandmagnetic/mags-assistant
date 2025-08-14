@@ -266,3 +266,21 @@ Early support for generating short-form video drafts from a Google Drive inbox a
 - `YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` – YouTube uploads.
 - `TIKTOK_SESSION_COOKIE` – TikTok session with access to trending sounds.
 - `IG_SESSION_COOKIE` – Instagram session for selecting trending audio.
+
+## Google Sheets cleanup and forwarding
+
+An Apps Script is provided in `integrations/google_sheets/auto_clean_and_forward.gs` to
+back up, normalize and forward Google Form responses.
+
+### Setup
+1. Copy the script into a new Apps Script project or bind it to an existing spreadsheet.
+2. Update `QUIZ_SHEET_ID` and `FEEDBACK_SHEET_ID` constants with your sheet IDs.
+3. In **Project Settings → Script properties**, add:
+   - `WORKER_URL` – endpoint to receive form submissions.
+   - `NOTION_TOKEN` and `HQ_DATABASE_ID` (optional) to also log entries to Notion.
+4. Run the `cleanAndBindAll` function to back up and clean both sheets.
+   - Duplicate header rows are removed.
+   - Empty rows/columns trimmed.
+   - Headers normalized to `lower_snake_case` with a `timestamp` and `form_source` column.
+5. The script installs an *On form submit* trigger that posts new rows to `WORKER_URL` and
+   logs any errors to a sheet named `Error_Log`.
