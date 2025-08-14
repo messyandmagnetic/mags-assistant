@@ -15,6 +15,15 @@ Test links:
 - https://mags-assistant.vercel.app/planner — planner page
 - https://mags-assistant.vercel.app/check — system check panel
 
+## Brain sources
+
+Pinned Notion pages for periodic sync:
+
+- https://www.notion.so/MM-Site-Content-24a796c707c1808d8e59fb5b792e0fb8
+- https://www.notion.so/Mags-Task-Manager-24b796c707c18018a017c7b267a6bf61
+
+Add more by editing `public/mags-config.json` under `brain.sources.notion.pinned`.
+
 ## API map
 
 - `POST /api/ops?action=status` – list present env vars
@@ -45,9 +54,15 @@ Where to point Tally webhooks:
 - Preferred: Tally → Worker → `GAS_INTAKE_URL` (forwards raw body + headers)
 - Direct: Tally → `GAS_INTAKE_URL` (disable Worker forwarding to avoid double writes)
 
+**Tally → Worker (fan-out) is the only active integration path.** Leave the Worker webhook enabled and disable Tally's direct Google Sheets or Notion integrations. See [docs/tally-wiring.md](docs/tally-wiring.md) for setup notes.
+
 Backfill: provide `TALLY_API_KEY` and run the **Backfill Tally** sheet menu or trigger the `tally-backfill` GitHub Action.
 
 Docs: [Apps Script deploy](docs/apps-script-deploy.md) · [Sheet details](docs/tally-sheets.md) · [Curl tests](docs/tally-tests.md)
+
+### Smoke tests
+
+The `smoke` GitHub Action checks the worker `/health` endpoint and posts synthetic payloads to `/tally-intake`. View logs in the Actions tab and re-run the workflow as needed.
 
 ### Cloudflare Cron
 

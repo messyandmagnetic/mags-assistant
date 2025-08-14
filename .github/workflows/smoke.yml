@@ -18,6 +18,9 @@ jobs:
       API_BASE: ${{ secrets.API_BASE }}
       TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
       TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      WORKER_URL: https://tight-snow-2840.messyandmagnetic.workers.dev
+      WORKER_KEY: ${{ secrets.WORKER_KEY }}
+      GAS_INTAKE_URL: ${{ secrets.GAS_INTAKE_URL }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,12 +44,32 @@ jobs:
           curl -fsS https://mags-assistant.vercel.app/health.json -o /tmp/health.json --max-time 8
           node -e "const j=require('fs').readFileSync('/tmp/health.json','utf8'); const o=JSON.parse(j); if(!o.ok) { console.error('health.ok != true'); process.exit(1) }"
 
-      - name: Check Worker (non-blocking)
+      - name: Worker health
         run: |
           set -euo pipefail
-          url="https://tight-snow-2840.messyandmagnetic.workers.dev"
-          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 6 "$url" || true)
-          echo "Worker HTTP $code"
+          curl -fsS "$WORKER_URL/health" -o /tmp/worker-health.json --max-time 8
+          node -e "const j=require('fs').readFileSync('/tmp/worker-health.json','utf8'); const o=JSON.parse(j); if(!o.ok){process.exit(1)}"
+
+      - name: Tally intake smoke
+        run: |
+          set -euo pipefail
+          for id in 3qlZQ9 nGPKDo; do
+            payload="{\"form_id\":\"$id\",\"submission_id\":\"smoke-$id\",\"test\":true}"
+            curl -fsS -X POST "$WORKER_URL/tally-intake" \
+              -H "content-type: application/json" \
+              -H "x-worker-key: $WORKER_KEY" \
+              -d "$payload" -o /tmp/intake.json
+            node -e "const o=JSON.parse(require('fs').readFileSync('/tmp/intake.json','utf8')); if(!o.ok) process.exit(1)"
+          done
+          if [ -n "$GAS_INTAKE_URL" ]; then
+            echo "Submitted test rows to GAS"
+          else
+            echo "GAS_INTAKE_URL not set; skipping row check"
+          fi
+
+      - name: Summarize smoke
+        id: summary
+        run: echo "result=Worker /health and /tally-intake ok" >> $GITHUB_OUTPUT
 
       - name: Smoke test API ping
         if: env.HAS_API == 'true'
@@ -63,3 +86,13 @@ jobs:
           curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
             -d text="✅ Smoke passed at $(date --iso-8601=seconds)"
+
+      - name: Comment on PR
+        if: success() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const body = `Smoke test: ${process.env.RESULT}\nRows (if GAS enabled) should appear in:\n- Quiz Sheet: https://docs.google.com/spreadsheets/d/1JCcWIU7Mry540o3dpYlIvR0k4pjsGF743bG8vu8cds0\n- Feedback Sheet: https://docs.google.com/spreadsheets/d/1DdqXoAdV-VQ565aHzJ9W0qsG5IJqpRBf7FE6-HkzZm8`;
+            github.rest.issues.createComment({ issue_number: context.issue.number, owner: context.repo.owner, repo: context.repo.repo, body });
+        env:
+          RESULT: ${{ steps.summary.outputs.result }}

@@ -1,5 +1,5 @@
 // Cloudflare Worker implementing health, status, stripe audit, digest routes
-import { handleTallyWebhook, handleBackfill } from './routes/tally';
+import { handleTallyIntake, handleBackfill } from './routes/tally';
 import { handleTallyTest } from './routes/tally_test';
 
 type Env = {
@@ -76,8 +76,8 @@ export default {
       return handleTallyTest(req, env);
     }
 
-    if (req.method === 'POST' && p === '/tally') {
-      return handleTallyWebhook(req, env);
+    if (req.method === 'POST' && p === '/tally-intake') {
+      return handleTallyIntake(req, env);
     }
 
     if (req.method === 'POST' && p === '/tally/webhook') {
@@ -99,6 +99,16 @@ export default {
         console.log('tally/webhook_error');
         return bad('forward_failed', 500);
       }
+    }
+
+    if (req.method === 'POST' && p === '/logs') {
+      if (env.WORKER_KEY) {
+        const k = req.headers.get('x-worker-key');
+        if (k !== env.WORKER_KEY) return bad('unauthorized', 401);
+      }
+      const body = await req.text();
+      console.log('log', body);
+      return ok();
     }
 
     if (req.method === 'POST' && p === '/backfill') {
