@@ -112,15 +112,14 @@ export default {
     }
 
     // tally webhook
-    if (pathname === '/api/tally/webhook' && method === 'POST') {
+    if ((pathname === '/tally/webhook' || pathname === '/api/tally/webhook') && method === 'POST') {
       const sig = request.headers.get('tally-webhook-secret') || request.headers.get('TALLY_WEBHOOK_SECRET');
       if (env.TALLY_WEBHOOK_SECRET && sig !== env.TALLY_WEBHOOK_SECRET) {
         return new Response('unauthorized', { status: 401 });
       }
       const body = await request.text();
       if (env.GAS_INTAKE_URL) {
-        const headers = {};
-        request.headers.forEach((v, k) => (headers[k] = v));
+        const headers = { 'content-type': 'application/json' };
         await fetch(env.GAS_INTAKE_URL, { method: 'POST', body, headers });
       }
       return json({ ok: true });
