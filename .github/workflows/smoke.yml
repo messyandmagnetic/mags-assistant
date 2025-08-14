@@ -35,10 +35,18 @@ jobs:
             echo "HAS_API=false" >> "$GITHUB_ENV"
           fi
 
-      - name: Test static health endpoint
+      - name: Check static health
         run: |
-          curl -fsS "https://mags-assistant.vercel.app/health.json" -o /tmp/health.json
-          jq -e '.ok == true' /tmp/health.json
+          set -euo pipefail
+          curl -fsS https://mags-assistant.vercel.app/health.json -o /tmp/health.json --max-time 8
+          node -e "const j=require('fs').readFileSync('/tmp/health.json','utf8'); const o=JSON.parse(j); if(!o.ok) { console.error('health.ok != true'); process.exit(1) }"
+
+      - name: Check Worker (non-blocking)
+        run: |
+          set -euo pipefail
+          url="https://tight-snow-2840.messyandmagnetic.workers.dev"
+          code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 6 "$url" || true)
+          echo "Worker HTTP $code"
 
       - name: Smoke test API ping
         if: env.HAS_API == 'true'
