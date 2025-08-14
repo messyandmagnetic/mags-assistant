@@ -1,0 +1,19 @@
+name: intake-health
+on:
+  workflow_dispatch:
+jobs:
+  health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Worker health
+        env:
+          API_BASE: ${{ secrets.WORKER_URL }}
+        run: |
+          if [ -z "$API_BASE" ]; then echo "missing API_BASE, skipping"; exit 0; fi
+          curl -sS "$API_BASE/health" || true
+      - name: Apps Script health
+        env:
+          GAS_URL: ${{ secrets.GAS_INTAKE_URL }}
+        run: |
+          if [ -z "$GAS_URL" ]; then echo "missing GAS_URL, skipping"; exit 0; fi
+          curl -sS "$GAS_URL?action=health" || true
