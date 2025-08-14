@@ -28,14 +28,11 @@ export async function POST(req: NextRequest) {
         } catch {}
       }
       try {
-        await fetch(
-          `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ callback_query_id: update.callback_query.id }),
-          }
-        );
+        await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ callback_query_id: update.callback_query.id }),
+        });
       } catch {}
       return NextResponse.json({ ok: true });
     }
@@ -50,7 +47,41 @@ export async function POST(req: NextRequest) {
 
     if (text.startsWith('/')) {
       const [cmd, ...args] = text.split(' ');
+      const base = process.env.API_BASE ?? '';
       switch (cmd) {
+        case '/status':
+          try {
+            const r = await fetch(`${base}/api/status`);
+            const body = await r.text();
+            await sendTelegram(body || 'System online.');
+          } catch {
+            await sendTelegram('Status check failed.');
+          }
+          break;
+        case '/gen':
+          if (args[0] === 'filler') {
+            await fetch(`${base}/api/gen/filler`, { method: 'POST' }).catch(() => {});
+            await sendTelegram('Generating filler content.');
+          } else {
+            await sendTelegram('Unknown /gen command');
+          }
+          break;
+        case '/post':
+          if (args[0] === 'now') {
+            await fetch(`${base}/api/post/now`, { method: 'POST' }).catch(() => {});
+            await sendTelegram('Posting queued clip.');
+          } else {
+            await sendTelegram('Unknown /post command');
+          }
+          break;
+        case '/clip':
+          if (args[0] === 'last') {
+            await fetch(`${base}/api/clip/last`, { method: 'POST' }).catch(() => {});
+            await sendTelegram('Clipping last video.');
+          } else {
+            await sendTelegram('Unknown /clip command');
+          }
+          break;
         case '/queue':
           await sendTelegram('Queue is empty.');
           break;
@@ -69,30 +100,6 @@ export async function POST(req: NextRequest) {
             `Notion: ${process.env.NOTION_TOKEN ? 'on' : 'missing NOTION_TOKEN'}`,
           ];
           await sendTelegram(scopes.join('\n'));
-          break;
-        case '/status':
-          await sendTelegram('System online.');
-          break;
-        case '/gen':
-          if (args[0] === 'filler') {
-            await sendTelegram('Generating filler content.');
-          } else {
-            await sendTelegram('Unknown /gen command');
-          }
-          break;
-        case '/post':
-          if (args[0] === 'now') {
-            await sendTelegram('Posting queued clip.');
-          } else {
-            await sendTelegram('Unknown /post command');
-          }
-          break;
-        case '/clip':
-          if (args[0] === 'last') {
-            await sendTelegram('Clipping last video.');
-          } else {
-            await sendTelegram('Unknown /clip command');
-          }
           break;
         default:
           await sendTelegram('Unknown command');
