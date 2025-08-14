@@ -1,0 +1,61 @@
+name: Drive Watch
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  drive-watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade google-api-python-client google-auth-httplib2 google-auth-oauthlib requests
+      - name: Check Drive for new clips
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          DRIVE_FOLDER_ID: '1m-OjLhXttfS655ldGJxr9xFOqsWY25sD'
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+import json, os, io, pathlib, requests
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+
+folder_id = os.environ['DRIVE_FOLDER_ID']
+creds = service_account.Credentials.from_service_account_info(json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON']))
+drive = build('drive', 'v3', credentials=creds)
+log_path = pathlib.Path('public/mags-log.json')
+try:
+    log = json.load(open(log_path))
+except Exception:
+    log = {"drops": [], "clips": [], "trends": [], "posts": []}
+existing = {d.get('id') for d in log.get('drops', [])}
+query = f"'{folder_id}' in parents and (name contains '.mp4' or name contains '.mov' or name contains '.mkv')"
+files = drive.files().list(q=query, fields='files(id,name,modifiedTime)').execute().get('files', [])
+new = [f for f in files if f['id'] not in existing]
+raw_dir = pathlib.Path('Raw'); raw_dir.mkdir(exist_ok=True)
+for f in new:
+    request = drive.files().get_media(fileId=f['id'])
+    fh = io.FileIO(raw_dir / f['name'], 'wb')
+    downloader = MediaIoBaseDownload(fh, request)
+    done = False
+    while not done:
+        status, done = downloader.next_chunk()
+    fh.close()
+    log.setdefault('drops', []).append({'id': f['id'], 'name': f['name'], 'time': f['modifiedTime']})
+json.dump(log, open(log_path, 'w'), indent=2)
+if new:
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = os.environ.get('TELEGRAM_CHAT_ID')
+    if token and chat:
+        requests.post(f'https://api.telegram.org/bot{token}/sendMessage', json={'chat_id': chat, 'text': '📥 New raw clip found'})
+PY
