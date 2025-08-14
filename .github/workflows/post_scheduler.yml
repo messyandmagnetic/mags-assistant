@@ -1,0 +1,55 @@
+name: Post Scheduler
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Post or queue clips
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python - <<'PY'
+import json, os, pathlib, requests, datetime
+log_path = pathlib.Path('public/mags-log.json')
+queue_path = pathlib.Path('queue.json')
+try:
+    queue = json.load(queue_path.open()) if queue_path.exists() else []
+except Exception:
+    queue = []
+try:
+    log = json.load(log_path.open())
+except Exception:
+    log = {"drops": [], "clips": [], "trends": [], "posts": []}
+
+posted = []
+for item in queue[:12]:
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = os.environ.get('TELEGRAM_CHAT_ID')
+    if token and chat:
+        text = f"Posting {item.get('clip')} {item.get('hashtag','')}"
+        requests.post(f'https://api.telegram.org/bot{token}/sendMessage', json={'chat_id': chat, 'text': text})
+    posted.append(item)
+    log.setdefault('posts', []).append({
+        'clip': item.get('clip'),
+        'time': datetime.datetime.utcnow().isoformat() + 'Z'
+    })
+queue = queue[len(posted):]
+if not posted:
+    token = os.environ.get('TELEGRAM_BOT_TOKEN')
+    chat = os.environ.get('TELEGRAM_CHAT_ID')
+    if token and chat:
+        requests.post(f'https://api.telegram.org/bot{token}/sendMessage', json={'chat_id': chat, 'text': 'No clips available. Posting filler.'})
+json.dump(queue, queue_path.open('w'), indent=2)
+json.dump(log, log_path.open('w'), indent=2)
+PY

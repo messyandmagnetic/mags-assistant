@@ -70,6 +70,30 @@ export async function POST(req: NextRequest) {
           ];
           await sendTelegram(scopes.join('\n'));
           break;
+        case '/status':
+          await sendTelegram('System online.');
+          break;
+        case '/gen':
+          if (args[0] === 'filler') {
+            await sendTelegram('Generating filler content.');
+          } else {
+            await sendTelegram('Unknown /gen command');
+          }
+          break;
+        case '/post':
+          if (args[0] === 'now') {
+            await sendTelegram('Posting queued clip.');
+          } else {
+            await sendTelegram('Unknown /post command');
+          }
+          break;
+        case '/clip':
+          if (args[0] === 'last') {
+            await sendTelegram('Clipping last video.');
+          } else {
+            await sendTelegram('Unknown /clip command');
+          }
+          break;
         default:
           await sendTelegram('Unknown command');
       }
