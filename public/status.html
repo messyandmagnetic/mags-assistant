@@ -5,7 +5,15 @@
   <title>Maggie Status</title>
 </head>
 <body>
+  <h1>System Check</h1>
+  <div>
+    <a class="chip" href="docs/tally-sheets.md">Apps Script Intake</a>
+    <a class="chip" href="https://github.com/messyandmagnetic/mags-assistant/actions/workflows/brain-sync.yml">Brain Sync</a>
+  </div>
   <p id="brain">Brain: checking...</p>
+  <style>
+    .chip { display:inline-block; padding:4px 8px; margin:2px; background:#ddd; border-radius:8px; text-decoration:none; color:#000; }
+  </style>
   <script>
     fetch('/mags-config.json')
       .then(r => r.json())
