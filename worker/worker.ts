@@ -1,4 +1,6 @@
 // Cloudflare Worker implementing health, status, stripe audit, digest routes
+import { handleTallyWebhook } from './routes/tally';
+import { handleTallyTest } from './routes/tally_test';
 
 type Env = {
   FETCH_PASS?: string;
@@ -15,6 +17,7 @@ type Env = {
   GENERAL_ONE_TIME_HINT?: string;
   GENERAL_MONTHLY_HINT?: string;
   FILING_250_HINT?: string;
+  TALLY_WEBHOOK_SECRET?: string;
 };
 
 function json(status: number, body: unknown, headers: HeadersInit = {}) {
@@ -60,6 +63,14 @@ export default {
         status: 200,
         headers: { 'content-type': 'text/plain' },
       });
+    }
+
+    if (req.method === 'GET' && p === '/tally/test') {
+      return handleTallyTest(req, env);
+    }
+
+    if (req.method === 'POST' && p === '/api/tally') {
+      return handleTallyWebhook(req, env);
     }
 
     // All POST routes gated

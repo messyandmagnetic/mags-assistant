@@ -1,0 +1,21 @@
+name: migrate-sheets
+on:
+  workflow_dispatch:
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx ts-node scripts/migrate_sheets.ts
+        env:
+          GOOGLE_CLIENT_EMAIL: ${{ secrets.GOOGLE_CLIENT_EMAIL }}
+          GOOGLE_PRIVATE_KEY_P1: ${{ secrets.GOOGLE_PRIVATE_KEY_P1 }}
+          GOOGLE_PRIVATE_KEY_P2: ${{ secrets.GOOGLE_PRIVATE_KEY_P2 }}
+          GOOGLE_PRIVATE_KEY_P3: ${{ secrets.GOOGLE_PRIVATE_KEY_P3 }}
+          GOOGLE_PRIVATE_KEY_P4: ${{ secrets.GOOGLE_PRIVATE_KEY_P4 }}
+          SHEET_ID_QUIZ: ${{ secrets.SHEET_ID_QUIZ }}
+          SHEET_ID_FEEDBACK: ${{ secrets.SHEET_ID_FEEDBACK }}
