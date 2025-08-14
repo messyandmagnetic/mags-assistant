@@ -21,6 +21,8 @@ const CANONICAL_HEADERS = [
   'user_agent',
   'ip',
   'raw_json',
+  'bundle_reco',
+  'bundle_payment_link',
 ];
 
 function doPost(e) {
@@ -58,6 +60,13 @@ function doPost(e) {
   const norm = normalizeSubmission(payload, ts, formId);
   try {
     const result = appendRow(target.id, target.tab, norm);
+    if (target.id === QUIZ_SHEET_ID && target.tab === QUIZ_TAB && result.status === 'ok') {
+      try {
+        mm_fillLastBundleArtifacts_();
+      } catch (err) {
+        logEntry(ts, formId, norm.submission_id, target.id, target.tab, 'error', 'bundle_' + err);
+      }
+    }
     const status = result.status === 'duplicate' ? 'duplicate-ignored' : result.status;
     logEntry(ts, formId, norm.submission_id, target.id, target.tab, status, result.error);
     if (status === 'ok') postAppendHook(norm);
@@ -211,6 +220,114 @@ function postAppendHook(sub) {
   }
 }
 
+/** Lookup payment link for bundle_id in Rules_Links */
+function mm_lookupBundleLink_(bundleId) {
+  if (!bundleId) return '';
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('Rules_Links');
+  if (!sh) return '';
+
+  const data = sh.getRange(2, 1, sh.getLastRow() - 1, 3).getValues();
+  for (let i = 0; i < data.length; i++) {
+    if ((data[i][0] || '').toString().trim() === bundleId.trim()) {
+      return (data[i][1] || '').toString().trim();
+    }
+  }
+  return '';
+}
+
+/** Extract bundle_id from "id | name | sku | $price" */
+function mm_extractBundleId_(bundleRecoCell) {
+  if (!bundleRecoCell) return '';
+  const parts = bundleRecoCell.toString().split('|');
+  return parts.length > 0 ? parts[0].trim() : '';
+}
+
+/** After inserting last row → fill bundle_reco and bundle_payment_link */
+function mm_fillLastBundleArtifacts_() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('Quiz_Responses');
+  if (!sh || sh.getLastRow() < 2) return;
+
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const colMap = {};
+  header.forEach((h, idx) => (colMap[h] = idx + 1));
+
+  const needCols = ['result_tier', 'score', 'product_choice', 'bundle_reco', 'bundle_payment_link'];
+  needCols.forEach((h) => {
+    if (!colMap[h]) throw new Error('Missing header: ' + h);
+  });
+
+  const r = sh.getLastRow();
+  const tier = sh.getRange(r, colMap['result_tier']).getValue();
+  const score = sh.getRange(r, colMap['score']).getValue();
+  const prod = sh.getRange(r, colMap['product_choice']).getValue();
+
+  const reco = mm_getBundleReco_(tier, score, prod);
+  const recoText = reco ? `${reco.id} | ${reco.name} | ${reco.sku} | $${reco.price}` : '';
+  sh.getRange(r, colMap['bundle_reco']).setValue(recoText);
+
+  const bundleId = mm_extractBundleId_(recoText);
+  const link = mm_lookupBundleLink_(bundleId);
+  sh.getRange(r, colMap['bundle_payment_link']).setValue(link);
+}
+
+/** Bulk recompute bundle recos for all rows (idempotent) */
+function mm_fillAllBundleRecos() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('Quiz_Responses');
+  if (!sh) return;
+
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const colMap = {};
+  header.forEach((h, idx) => (colMap[h] = idx + 1));
+
+  const needCols = ['result_tier', 'score', 'product_choice', 'bundle_reco'];
+  needCols.forEach((h) => {
+    if (!colMap[h]) throw new Error('Missing header: ' + h);
+  });
+
+  const last = sh.getLastRow();
+  if (last < 2) return;
+
+  const tiers = sh.getRange(2, colMap['result_tier'], last - 1, 1).getValues();
+  const scores = sh.getRange(2, colMap['score'], last - 1, 1).getValues();
+  const prods = sh.getRange(2, colMap['product_choice'], last - 1, 1).getValues();
+  const out = [];
+  for (let i = 0; i < tiers.length; i++) {
+    const reco = mm_getBundleReco_(tiers[i][0], scores[i][0], prods[i][0]);
+    const text = reco ? `${reco.id} | ${reco.name} | ${reco.sku} | $${reco.price}` : '';
+    out.push([text]);
+  }
+  sh.getRange(2, colMap['bundle_reco'], out.length, 1).setValues(out);
+}
+
+/** Bulk recompute payment links for all rows (idempotent) */
+function mm_fillAllBundleLinks() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sh = ss.getSheetByName('Quiz_Responses');
+  if (!sh) return;
+
+  const header = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0];
+  const colMap = {};
+  header.forEach((h, idx) => (colMap[h] = idx + 1));
+
+  const needCols = ['bundle_reco', 'bundle_payment_link'];
+  needCols.forEach((h) => {
+    if (!colMap[h]) throw new Error('Missing header: ' + h);
+  });
+
+  const last = sh.getLastRow();
+  if (last < 2) return;
+
+  const src = sh.getRange(2, colMap['bundle_reco'], last - 1, 1).getValues();
+  const out = src.map((row) => {
+    const id = mm_extractBundleId_(row[0]);
+    return [mm_lookupBundleLink_(id)];
+  });
+  sh.getRange(2, colMap['bundle_payment_link'], out.length, 1).setValues(out);
+}
+
 function protectFormulaCols(sh) {
   const lastRow = sh.getLastRow();
   if (lastRow < 2) return;
@@ -226,11 +343,18 @@ function protectFormulaCols(sh) {
 }
 
 function onOpen() {
-  SpreadsheetApp.getUi()
+  const ui = SpreadsheetApp.getUi();
+  ui
     .createMenu('Tally')
     .addItem('Backfill Tally', 'backfillMenu')
     .addItem('Fix headers', 'fixHeaders')
     .addItem('Dedupe now', 'dedupeAll')
+    .addToUi();
+  ui
+    .createMenu('MM Tools')
+    .addItem('Rebuild Dashboard Tabs', 'createDashboardTabs_')
+    .addItem('Recompute ALL Bundle Recos', 'mm_fillAllBundleRecos')
+    .addItem('Recompute ALL Payment Links', 'mm_fillAllBundleLinks')
     .addToUi();
 }
 

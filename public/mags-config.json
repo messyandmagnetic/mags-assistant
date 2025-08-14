@@ -27,6 +27,27 @@
       "nightly": "/cron/nightly"
     }
   },
+  "sheets": {
+    "quiz": "1JCcWIU7Mry540o3dpYlIvR0k4pjsGF743bG8vu8cds0",
+    "feedback": "1DdqXoAdV-VQ565aHzJ9W0qsG5IJqpRBf7FE6-HkzZm8"
+  },
+  "tally": {
+    "quiz_form_id": "3qlZQ9",
+    "feedback_form_id": "nGPKDo"
+  },
+  "dash": {
+    "bundle_rules_tab": "Rules_Bundles",
+    "bundle_links_tab": "Rules_Links",
+    "response_tab": "Quiz_Responses",
+    "bundle_columns": [
+      "bundle_reco",
+      "bundle_payment_link"
+    ]
+  },
+  "notes": [
+    "Worker forwards Tally JSON to Apps Script intake.",
+    "Apps Script computes bundle and attaches Stripe Payment Link."
+  ],
   "ops": {
     "status_reporting": {
       "enabled": true,
