@@ -1,0 +1,25 @@
+name: Mags status daily
+
+on:
+  schedule:
+    - cron: "5 13 * * *"
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - name: Run status pack
+        run: node --version && npx tsx scripts/ops/status-pack.ts | tee status.json
+      - name: Post to Telegram (if configured)
+        run: npx tsx scripts/notify/status-to-telegram.ts status.json || true
+      - name: Attach summary to run
+        uses: actions/upload-artifact@v4
+        with:
+          name: mags-status
+          path: status.json
