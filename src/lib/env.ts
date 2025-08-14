@@ -26,6 +26,7 @@ const envSchema = z.object({
   TELEGRAM_CALLBACK_SECRET: z.string().optional(),
   TALLY_API_KEY: z.string().optional(),
   TALLY_WEBHOOK_SECRET: z.string().optional(),
+  GAS_INTAKE_URL: z.string().optional(),
   STRIPE_WEBHOOK_SECRET: z.string().optional(),
   SCRAPER_PROVIDER: z.string().optional().default('actions'),
   NEXT_PUBLIC_SITE_URL: z.string().optional(),
