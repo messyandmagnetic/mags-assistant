@@ -156,6 +156,32 @@
   "deployment": {
     "prod_url": "https://mags-assistant.vercel.app"
   },
+  "brain": {
+    "sources": {
+      "notion": {
+        "pinned": [
+          "https://www.notion.so/MM-Site-Content-24a796c707c1808d8e59fb5b792e0fb8",
+          "https://www.notion.so/Mags-Task-Manager-24b796c707c18018a017c7b267a6bf61"
+        ]
+      }
+    },
+    "sync": {
+      "rules": {
+        "whitelist": [
+          "https://www.notion.so/MM-Site-Content-24a796c707c1808d8e59fb5b792e0fb8",
+          "https://www.notion.so/Mags-Task-Manager-24b796c707c18018a017c7b267a6bf61"
+        ]
+      }
+    },
+    "status": {
+      "last_sync": null,
+      "sources_count": 2,
+      "notes": ""
+    },
+    "inbox": {
+      "notion_page_or_db_id": ""
+    }
+  },
   "notion_brain": {
     "url": "https://www.notion.so/Mags-Task-Manager-24b796c707c18018a017c7b267a6bf61",
     "id": "24b796c707c18018a017c7b267a6bf61",
