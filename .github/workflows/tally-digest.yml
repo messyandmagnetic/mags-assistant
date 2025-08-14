@@ -1,0 +1,19 @@
+name: tally-digest
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip if secrets missing
+        if: ${{ secrets.TELEGRAM_BOT_TOKEN == '' || secrets.TELEGRAM_CHAT_ID == '' || secrets.TALLY_API_KEY == '' }}
+        run: echo 'secrets missing, skip' && exit 0
+      - uses: actions/checkout@v4
+      - name: Send digest
+        env:
+          TALLY_API_KEY: ${{ secrets.TALLY_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: node scripts/tally_digest.mjs

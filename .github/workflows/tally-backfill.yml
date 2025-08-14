@@ -1,0 +1,24 @@
+name: tally-backfill
+on:
+  workflow_dispatch:
+    inputs:
+      FORM_ID:
+        description: 'Form ID'
+        required: true
+        default: '3qlZQ9'
+  schedule:
+    - cron: '0 3 * * 1'
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Skip if missing TALLY_API_KEY
+        if: ${{ secrets.TALLY_API_KEY == '' }}
+        run: echo 'TALLY_API_KEY missing, skipping backfill.' && exit 0
+      - name: Trigger backfill via Worker
+        env:
+          WORKER_URL: ${{ secrets.WORKER_URL }}
+          TALLY_API_KEY: ${{ secrets.TALLY_API_KEY }}
+        run: |
+          curl -sS -X POST "$WORKER_URL/backfill?form_id=${{ github.event.inputs.FORM_ID }}" \
+            -H "X-Tally-Key: $TALLY_API_KEY"

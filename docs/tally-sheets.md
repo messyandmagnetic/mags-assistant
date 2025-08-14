@@ -60,3 +60,12 @@ GET `https://<web-app-url>/health` returns:
 ## Worker Notes
 
 The Worker verifies the `tally-signature` header and forwards the exact body and headers to `GAS_INTAKE_URL`. This avoids double posting and keeps the Worker URL stable.
+
+## Disable double-writes
+
+Exactly one live destination per form:
+
+- Tally → Worker → Apps Script *(preferred)*
+- Tally → Apps Script *(direct)*
+
+Ensure any legacy Tally → Google Sheets integrations are **OFF** to prevent duplicate rows.
