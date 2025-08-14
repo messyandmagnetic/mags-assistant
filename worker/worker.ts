@@ -18,6 +18,7 @@ type Env = {
   GENERAL_MONTHLY_HINT?: string;
   FILING_250_HINT?: string;
   TALLY_WEBHOOK_SECRET?: string;
+  GAS_INTAKE_URL?: string;
 };
 
 function json(status: number, body: unknown, headers: HeadersInit = {}) {

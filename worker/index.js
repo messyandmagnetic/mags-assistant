@@ -117,8 +117,12 @@ export default {
       if (env.TALLY_WEBHOOK_SECRET && sig !== env.TALLY_WEBHOOK_SECRET) {
         return new Response('unauthorized', { status: 401 });
       }
-      const body = await request.json();
-      console.log('tally webhook', body);
+      const body = await request.text();
+      if (env.GAS_INTAKE_URL) {
+        const headers = {};
+        request.headers.forEach((v, k) => (headers[k] = v));
+        await fetch(env.GAS_INTAKE_URL, { method: 'POST', body, headers });
+      }
       return json({ ok: true });
     }
 

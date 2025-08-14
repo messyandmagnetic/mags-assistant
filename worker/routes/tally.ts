@@ -1,14 +1,6 @@
-import { CANONICAL_COLUMNS, normalizeSubmission } from '../lib/schema';
-import { ensureHeaders, upsertRow, Env as SheetsEnv } from '../lib/sheets';
-import {
-  SHEET_ID_QUIZ,
-  SHEET_ID_FEEDBACK,
-  TALLY_FORM_ID_QUIZ,
-  TALLY_FORM_ID_FEEDBACK,
-} from '../lib/config';
-
-export interface Env extends SheetsEnv {
+export interface Env {
   TALLY_WEBHOOK_SECRET?: string;
+  GAS_INTAKE_URL?: string;
 }
 
 function hex(buffer: ArrayBuffer) {
@@ -29,26 +21,6 @@ async function verifySignature(body: string, secret: string, signature: string) 
   return hex(digest) === signature;
 }
 
-function extractSubmission(payload: any) {
-  const base: Record<string, any> = {};
-  const data = payload?.data || payload;
-  base.submission_id = data.id || payload.responseId || '';
-  base.submitted_at = data.createdAt || payload.created_at || new Date().toISOString();
-  const answers: Record<string, any> = {};
-  const fields = data?.data || data?.fields || [];
-  if (Array.isArray(fields)) {
-    for (const f of fields) {
-      const label = f.label || f.title || f.key;
-      const value = f.value || f.answer || '';
-      answers[label] = typeof value === 'string' ? value : JSON.stringify(value);
-    }
-  } else if (fields && typeof fields === 'object') {
-    Object.assign(answers, fields);
-  }
-  Object.assign(base, answers);
-  return normalizeSubmission(base);
-}
-
 export async function handleTallyWebhook(req: Request, env: Env): Promise<Response> {
   const body = await req.text();
   if (!env.TALLY_WEBHOOK_SECRET)
@@ -59,14 +31,11 @@ export async function handleTallyWebhook(req: Request, env: Env): Promise<Respon
     req.headers.get('tally-signature') || ''
   );
   if (!ok) return new Response('invalid signature', { status: 401 });
-  const payload = JSON.parse(body);
-  const submission = extractSubmission(payload);
-  submission.source = 'maggie';
-  submission.processed_at = new Date().toISOString();
-  const formId = payload?.data?.formId || payload.formId;
-  const sheetId = formId === TALLY_FORM_ID_FEEDBACK ? SHEET_ID_FEEDBACK : SHEET_ID_QUIZ;
-  await ensureHeaders(env, sheetId, 'Submissions_Clean', CANONICAL_COLUMNS);
-  await upsertRow(env, sheetId, 'Submissions_Clean', submission, CANONICAL_COLUMNS);
+  if (env.GAS_INTAKE_URL) {
+    const headers: Record<string, string> = {};
+    req.headers.forEach((v, k) => (headers[k] = v));
+    await fetch(env.GAS_INTAKE_URL, { method: 'POST', body, headers });
+  }
   return new Response(JSON.stringify({ ok: true }), {
     status: 200,
     headers: { 'content-type': 'application/json' },
