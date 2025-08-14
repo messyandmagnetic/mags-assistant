@@ -1,98 +1,107 @@
 #!/usr/bin/env python3
-"""Extract short clips from raw videos using FFmpeg, Whisper, and OpenAI Vision.
-This script scans provided video files, identifies high-emotion moments,
-checks for safety issues, and writes clips to the AutoClips directory.
+"""Cut short clips from raw videos using FFmpeg, Whisper, and Google Vision.
+Generates 2–12 second safe clips and logs lifecycle to public/mags-log.json.
 """
 
+import os
 import json
-import pathlib
+import uuid
 import subprocess
-from typing import List, Tuple
+import pathlib
+from datetime import datetime
 
-AUTOCLIPS_DIR = pathlib.Path('AutoClips')
+import openai
+from google.cloud import vision
+
+RAW_DIR = pathlib.Path('Raw')
+CLIP_DIR = pathlib.Path('Clips')
 LOG_PATH = pathlib.Path('public/mags-log.json')
-AUTOCLIPS_DIR.mkdir(exist_ok=True)
+
+openai.api_key = os.getenv('OPENAI_API_KEY')
+vision_client = vision.ImageAnnotatorClient()
 
 
-def load_log() -> dict:
-    if LOG_PATH.exists():
-        with open(LOG_PATH) as f:
-            return json.load(f)
-    return {"drops": [], "clips": [], "trends": [], "posts": []}
-
-
-def save_log(data: dict) -> None:
-    with open(LOG_PATH, 'w') as f:
-        json.dump(data, f, indent=2)
-
-
-def get_duration(path: str) -> float:
+def load_log():
     try:
-        result = subprocess.run(
-            [
-                'ffprobe',
-                '-v',
-                'error',
-                '-show_entries',
-                'format=duration',
-                '-of',
-                'default=noprint_wrappers=1:nokey=1',
-                path,
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return float(result.stdout.strip())
+        return json.load(open(LOG_PATH))
     except Exception:
-        return 0.0
+        return {"clips": []}
 
 
-def detect_highlights(video_path: str) -> List[Tuple[float, float]]:
-    """Placeholder highlight detection.
-    Real implementation would use Whisper and emotion models.
-    """
-    duration = get_duration(video_path)
-    end = min(5, duration)
-    return [(0.0, end)] if end > 0 else []
+def save_log(data):
+    json.dump(data, open(LOG_PATH, 'w'), indent=2)
 
 
-def safe(video_path: str) -> bool:
-    """Placeholder safety check using OpenAI Vision.
-    Returns True when content is considered safe.
-    """
-    return True
+def get_duration(path):
+    result = subprocess.run(
+        [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            str(path)
+        ], capture_output=True, text=True, check=True
+    )
+    return float(result.stdout.strip())
 
 
-def extract(video_path: str) -> List[str]:
-    clips = []
-    for idx, (start, end) in enumerate(detect_highlights(video_path), start=1):
-        out_path = AUTOCLIPS_DIR / f"{pathlib.Path(video_path).stem}_clip{idx}.mp4"
-        duration = end - start
-        subprocess.run(
-            ['ffmpeg', '-y', '-ss', str(start), '-i', video_path, '-t', str(duration), '-c', 'copy', str(out_path)],
-            check=False,
-        )
-        clips.append(str(out_path))
-    return clips
+def transcribe(path):
+    with open(path, 'rb') as f:
+        res = openai.Audio.transcribe('whisper-1', f)
+    return res.get('text', '')
 
 
-def process(video_path: str) -> List[str]:
-    if not safe(video_path):
-        return []
-    clips = extract(video_path)
+def safe(path):
+    frame = subprocess.check_output([
+        'ffmpeg', '-i', str(path), '-vframes', '1', '-f', 'image2pipe', '-vcodec', 'png', '-'
+    ])
+    image = vision.Image(content=frame)
+    res = vision_client.safe_search_detection(image=image)
+    anno = res.safe_search_annotation
+    return anno.adult < 3 and anno.violence < 3
+
+
+def extract_segments(video):
+    duration = get_duration(video)
+    start = 0.0
+    segments = []
+    while start + 2 < duration:
+        end = min(start + 12, duration)
+        segments.append((start, end))
+        start += 10
+    return segments
+
+
+def process_video(video):
     log = load_log()
-    for clip in clips:
-        log.setdefault('clips', []).append({'source': video_path, 'clip': clip})
+    segments = extract_segments(video)
+    CLIP_DIR.mkdir(exist_ok=True)
+    for idx, (start, end) in enumerate(segments, start=1):
+        clip_path = CLIP_DIR / f"{video.stem}_{idx}.mp4"
+        subprocess.run([
+            'ffmpeg', '-y', '-i', str(video), '-ss', str(start), '-to', str(end), '-c', 'copy', str(clip_path)
+        ], check=True)
+        if not safe(clip_path):
+            clip_path.unlink(missing_ok=True)
+            continue
+        transcript = transcribe(clip_path)
+        clip_id = str(uuid.uuid4())
+        entry = {
+            'id': clip_id,
+            'source': video.name,
+            'path': str(clip_path),
+            'transcript': transcript,
+            'status': 'cut',
+            'timestamps': {'cut': datetime.utcnow().isoformat() + 'Z'}
+        }
+        log['clips'].append(entry)
     save_log(log)
-    return clips
 
 
-def main() -> None:
-    import sys
-
-    for video in sys.argv[1:]:
-        process(video)
+def main():
+    RAW_DIR.mkdir(exist_ok=True)
+    for video in RAW_DIR.glob('*.mp4'):
+        process_video(video)
 
 
 if __name__ == '__main__':

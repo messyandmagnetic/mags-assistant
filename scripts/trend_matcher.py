@@ -1,46 +1,54 @@
 #!/usr/bin/env python3
-"""Match clips to trending TikTok sounds and hashtags."""
+"""Match cut clips with daily TikTok sound and caption trends."""
 
 import json
-import pathlib
 import random
-from typing import List, Dict
+import datetime
+import pathlib
+from typing import Dict, List
 
-AUTOCLIPS_DIR = pathlib.Path('AutoClips')
+import requests
+
 LOG_PATH = pathlib.Path('public/mags-log.json')
 
 
 def load_log() -> Dict:
     if LOG_PATH.exists():
-        with open(LOG_PATH) as f:
-            return json.load(f)
-    return {"drops": [], "clips": [], "trends": [], "posts": []}
+        return json.load(LOG_PATH.open())
+    return {"clips": []}
 
 
 def save_log(data: Dict) -> None:
-    with open(LOG_PATH, 'w') as f:
-        json.dump(data, f, indent=2)
+    json.dump(data, LOG_PATH.open('w'), indent=2)
 
 
-def get_trends() -> List[Dict[str, str]]:
-    """Placeholder scraper for trending TikTok data."""
-    return [
-        {"sound": "trend_sound_1", "hashtag": "#fyp"},
-        {"sound": "trend_sound_2", "hashtag": "#viral"},
-        {"sound": "trend_sound_3", "hashtag": "#xyz"},
-    ]
+def fetch_trends() -> List[Dict[str, str]]:
+    try:
+        resp = requests.get('https://www.tiktok.com/api/trending/item_list/?count=30')
+        data = resp.json()
+        items = data.get('itemList', [])
+        return [
+            {
+                'sound': it.get('music', {}).get('title', ''),
+                'caption': it.get('desc', '')
+            }
+            for it in items
+        ]
+    except Exception:
+        return []
 
 
-def match_clips() -> None:
+def match() -> None:
     log = load_log()
-    clips = log.get('clips', [])
-    trends = get_trends()
-    for clip in clips:
-        choice = random.choice(trends)
-        entry = {**clip, **choice}
-        log.setdefault('trends', []).append(entry)
+    trends = fetch_trends()
+    for clip in log.get('clips', []):
+        if clip.get('status') == 'cut' and not clip.get('trend') and trends:
+            trend = random.choice(trends)
+            clip['trend'] = trend
+            clip['status'] = 'matched'
+            clip.setdefault('timestamps', {})['matched'] = datetime.datetime.utcnow().isoformat() + 'Z'
     save_log(log)
 
 
 if __name__ == '__main__':
-    match_clips()
+    match()
