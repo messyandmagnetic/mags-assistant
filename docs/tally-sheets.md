@@ -2,6 +2,11 @@
 
 This doc shows how Tally form submissions travel through the Worker into a single Google Apps Script web app and end up in Google Sheets.
 
+## URLs
+
+- **Worker**: `https://tight-snow-2840.messyandmagnetic.workers.dev`
+- **GAS intake**: secret `GAS_INTAKE_URL`
+
 ## Forms
 
 | Form | Form ID | Sheet ID | Tab |
@@ -85,3 +90,19 @@ function fixHeaders(sh){
 Send a synthetic payload to the Worker `/tally/webhook` endpoint and confirm a new row appears in the target tab and a line is appended in the `Logs` tab.
 
 The `GAS_READ_URL` endpoint supports `GET ?sheetId=<id>&tab=<tab>&limit=100` and returns normalized JSON rows for use by the brain sync workflow.
+
+## Maintenance
+
+After deploying the Worker, register webhooks and disable old integrations:
+
+```sh
+node scripts/tally-webhook-register.mjs
+```
+
+To replay historical submissions into Sheets:
+
+```sh
+node scripts/tally-backfill.mjs
+```
+
+Both scripts require `TALLY_API_KEY` (and `TALLY_WEBHOOK_SECRET` for backfill) in the environment.
