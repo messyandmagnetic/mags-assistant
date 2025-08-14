@@ -4,7 +4,6 @@
     "version": 2,
     "cleanUrls": true
   },
-
   "code_layout": {
     "static_site": true,
     "has_api_routes": false,
@@ -15,13 +14,11 @@
       "public/mags-config.json"
     ]
   },
-
   "endpoints": {
     "status_page": "/check",
     "health": "/health",
     "echo": "/api/echo"
   },
-
   "cloudflare": {
     "worker_url": "https://tight-snow-2840.messyandmagnetic.workers.dev",
     "cron": {
@@ -30,11 +27,13 @@
       "nightly": "/cron/nightly"
     }
   },
-
   "ops": {
     "status_reporting": {
       "enabled": true,
-      "channels": ["GitHub PR comments", "Telegram"]
+      "channels": [
+        "GitHub PR comments",
+        "Telegram"
+      ]
     },
     "telegram": {
       "enabled": true,
@@ -43,7 +42,6 @@
       "default_prefix": "[Mags]"
     }
   },
-
   "project": {
     "owner": "messyandmagnetic",
     "repo": "mags-assistant",
@@ -68,7 +66,6 @@
       ]
     }
   },
-
   "github_actions": {
     "workflows": [
       "cron-runner.yml",
@@ -88,13 +85,16 @@
     "policy": {
       "dispatchable": true,
       "default_branch": "main",
-      "required_permissions": ["contents:write", "pull_requests:write", "actions:read"]
+      "required_permissions": [
+        "contents:write",
+        "pull_requests:write",
+        "actions:read"
+      ]
     },
     "skip_rules": {
       "skip_if_api_base_empty": true
     }
   },
-
   "secrets": {
     "present": [
       "API_BASE",
@@ -121,7 +121,6 @@
       "WORKER_URL": "Cloudflare Worker base URL if different from cloudflare.worker_url."
     }
   },
-
   "guard_rails": {
     "vercel_json_rules": [
       "No legacy now-* runtimes",
@@ -132,5 +131,8 @@
       "Workflows that POST to /api/* must be gated because site is static",
       "If API_BASE is empty or not reachable, skip those jobs instead of failing"
     ]
+  },
+  "deployment": {
+    "prod_url": "https://mags-assistant.vercel.app"
   }
 }

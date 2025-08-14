@@ -7,7 +7,6 @@ on:
 
 jobs:
   run:
-    if: env.USE_GH_CRON == 'true' && env.API_BASE != '' && startsWith(env.API_BASE, 'http')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -15,8 +14,19 @@ jobs:
       API_BASE: ${{ secrets.API_BASE }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
     steps:
+      - name: Check cron flag
+        run: |
+          if [ "$USE_GH_CRON" != "true" ]; then
+            echo "skipped by USE_GH_CRON"
+            exit 0
+          fi
+      - name: Check API base
+        run: |
+          if [ -z "$API_BASE" ]; then
+            echo "API_BASE empty; skipping API calls"
+            exit 0
+          fi
       - name: Trigger scan
-        shell: bash
         run: |
           set -euo pipefail
           curl -sS -X POST "$API_BASE/api/commands/scan" \
@@ -26,7 +36,6 @@ jobs:
             | tee scan.json
       - name: Run due social posts
         if: env.API_BASE == 'https://mags-assistant.vercel.app'
-        shell: bash
         run: |
           set -euo pipefail
           curl -sS -X POST "$API_BASE/api/social/run-due" \

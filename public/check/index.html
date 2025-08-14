@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>System Check</title>
+  <link rel="stylesheet" href="/brand.css" />
+  <style>
+    a.pill{display:inline-block;padding:4px 8px;margin:4px;border-radius:9999px;background:#eee;text-decoration:none;color:#000}
+    div.status{margin-top:4px}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>System Check</h1>
+    <div>
+      <a class="pill" id="vercel-link" href="https://mags-assistant.vercel.app/health" target="_blank">Vercel API</a>
+      <div id="vercel-status" class="status"></div>
+    </div>
+    <div>
+      <a class="pill" id="worker-link" href="https://tight-snow-2840.messyandmagnetic.workers.dev" target="_blank">Worker</a>
+      <div id="worker-status" class="status"></div>
+    </div>
+  </div>
+  <script>
+    async function check(id, url){
+      const el=document.getElementById(id);
+      try{
+        const res=await fetch(url);
+        const ok=res.ok?'OK':'FAIL';
+        el.textContent=`${ok} ${res.status}`;
+        el.style.color=res.ok?'green':'red';
+      }catch(e){
+        el.textContent='FAIL';
+        el.style.color='red';
+      }
+    }
+    check('vercel-status','https://mags-assistant.vercel.app/health');
+    check('worker-status','https://tight-snow-2840.messyandmagnetic.workers.dev');
+  </script>
+</body>
+</html>

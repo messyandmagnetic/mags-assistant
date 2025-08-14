@@ -7,18 +7,27 @@ jobs:
   run:
     runs-on: ubuntu-latest
     env:
-      PROD_URL: ${{ secrets.PROD_URL }}
+      API_BASE: ${{ secrets.API_BASE }}
       CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
-      - name: Check PROD_URL
-        id: check
+      - name: Compute API availability
         run: |
-          if [ -n "$PROD_URL" ] && curl -I -sS "$PROD_URL" | head -n 1 | grep -q "200"; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
+          if [ -n "$API_BASE" ]; then
+            echo "HAS_API=true" >> "$GITHUB_ENV"
           else
-            echo "Prod URL missing or unreachable; skipping analyze."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "HAS_API=false" >> "$GITHUB_ENV"
           fi
       - name: Hit analyze endpoint
-        if: steps.check.outputs.ok == 'true'
-        run: curl -fsS "$PROD_URL/api/social/analyze?token=$CRON_SECRET"
+        if: env.HAS_API == 'true'
+        run: curl -fsS "$API_BASE/api/social/analyze?token=$CRON_SECRET"
+      - name: No API base
+        if: env.HAS_API != 'true'
+        run: echo "No API_BASE; skipping analytics"
+      - name: Telegram ping
+        if: env.HAS_API != 'true' && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        run: |
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="nightly analytics skipped"

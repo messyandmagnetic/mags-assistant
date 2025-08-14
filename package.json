@@ -2,15 +2,11 @@
   "name": "mags-assistant",
   "private": true,
   "version": "1.0.0",
-
   "scripts": {
-    "build": "echo \"no build step; skipping\""
+    "prebuild": "node scripts/stamp-health.mjs",
+    "build": "echo 'static site build' "
   },
-
-  "engines": {
-    "node": "20.x"
-  },
-
+  "engines": { "node": ">=20 <23" },
   "dependencies": {},
   "devDependencies": {}
 }

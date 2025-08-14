@@ -9,30 +9,50 @@ jobs:
   run:
     runs-on: ubuntu-latest
     env:
+      API_BASE: ${{ secrets.API_BASE }}
       NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
       NOTION_DB_TRENDS: ${{ secrets.NOTION_DB_TRENDS }}
       WORKER_URL: ${{ secrets.WORKER_URL }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
     steps:
+      - name: Compute API availability
+        run: |
+          if [ -n "$API_BASE" ]; then
+            echo "HAS_API=true" >> "$GITHUB_ENV"
+          else
+            echo "HAS_API=false" >> "$GITHUB_ENV"
+          fi
       - name: Check dependencies
+        if: env.HAS_API == 'true'
         id: deps
         run: |
           missing=""
           [ -z "$NOTION_DB_TRENDS" ] && missing="NOTION_DB_TRENDS"
           [ -z "$WORKER_URL" ] && missing="$missing WORKER_URL"
           if [ -n "$missing" ]; then
-            echo "Missing $missing; skipping trends." 
+            echo "Missing $missing; skipping trends."
             echo "ok=false" >> "$GITHUB_OUTPUT"
           else
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
       - uses: actions/checkout@v4
-        if: steps.deps.outputs.ok == 'true'
+        if: env.HAS_API == 'true' && steps.deps.outputs.ok == 'true'
       - name: Fetch trends
-        if: steps.deps.outputs.ok == 'true'
+        if: env.HAS_API == 'true' && steps.deps.outputs.ok == 'true'
         run: npx tsx scripts/trends.ts
       - name: Notify failure
-        if: failure() && steps.deps.outputs.ok == 'true' && env.WORKER_URL != '' && startsWith(env.WORKER_URL, 'http')
+        if: failure() && env.HAS_API == 'true' && steps.deps.outputs.ok == 'true' && env.WORKER_URL != '' && startsWith(env.WORKER_URL, 'http')
         run: |
           curl -sS -X POST "$WORKER_URL/api/notify" \
             -H "content-type: application/json" \
             -d '{"summary":"nightly trends failed"}'
+      - name: No API base
+        if: env.HAS_API != 'true'
+        run: echo 'No API_BASE; skipping trends'
+      - name: Telegram ping
+        if: env.HAS_API != 'true' && env.TELEGRAM_BOT_TOKEN != '' && env.TELEGRAM_CHAT_ID != ''
+        run: |
+          curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
+            -d chat_id="${TELEGRAM_CHAT_ID}" \
+            -d text="nightly trends skipped"
