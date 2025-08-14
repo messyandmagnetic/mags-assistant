@@ -1,36 +1,97 @@
 {
-  "profile": {
-    "name": "Mags",
-    "owner": "Chanel Marraccini",
-    "brand": "Messy & Magnetic",
-    "contact": {
-      "phone": "505-249-1419",
-      "email": "YOUR_EMAIL_HERE"
+  "project": {
+    "owner": "messyandmagnetic",
+    "repo": "mags-assistant",
+    "deployment": {
+      "platform": "vercel",
+      "prod_url": "https://mags-assistant.vercel.app",
+      "vercel_json": {
+        "$schema": "https://openapi.vercel.sh/vercel.json",
+        "version": 2,
+        "cleanUrls": true
+      },
+      "node_policy": "20.x (project settings) — do not override with 22.x"
+    },
+    "code_layout": {
+      "static_site": true,
+      "has_api_routes": false,
+      "notable_files": [
+        "vercel.json",
+        "package.json",
+        ".github/workflows/*",
+        "public/mags-config.json"
+      ]
     }
   },
-  "content_defaults": {
-    "platforms": ["tiktok","reels","shorts"],
-    "language": "en",
-    "tone": ["warm","direct","playful"],
-    "cta_variants": [
-      "Follow for the build-out journey",
-      "Tap + save for later",
-      "DM “LAND” for details"
+  "github_actions": {
+    "workflows": [
+      "cron-runner.yml",
+      "drive-review.yml",
+      "health-check.yml",
+      "nightly-analytics.yml",
+      "nightly-trends.yml",
+      "preview-check.yml",
+      "smoke.yml",
+      "housekeeping.yml",
+      "memory-clean.yml",
+      "link-check.yml",
+      "ops-fallback.yml",
+      "post-windows.yml",
+      "stripe-sync.yml"
+    ],
+    "policy": {
+      "dispatchable": true,
+      "default_branch": "main",
+      "required_permissions": ["contents:write", "pull_requests:write", "actions:read"]
+    }
+  },
+  "secrets": {
+    "present": [
+      "API_BASE",
+      "CRON_SECRET",
+      "HQ_DATABASE_ID",
+      "NOTION_TOKEN",
+      "OPENAI_API_KEY",
+      "PROD_URL",
+      "TELEGRAM_BOT_TOKEN",
+      "TELEGRAM_CHAT_ID",
+      "USE_GH_CRON",
+      "VERCEL_PROD_URL",
+      "VERCEL_PROJECT_ID",
+      "VERCEL_TOKEN",
+      "WORKER_KEY"
+    ],
+    "maybe_missing": [
+      "WORKER_URL",
+      "NOTION_DB_TRENDS"
+    ],
+    "notes": {
+      "API_BASE": "Leave blank or point to your worker only if you actually serve API there. Static site = do NOT call it.",
+      "USE_GH_CRON": "Set to 'true' to let GitHub Actions run scheduled jobs; 'false' if Cloudflare/Vercel crons are used.",
+      "WORKER_URL": "Your Cloudflare Worker base like https://tight-snow-2840.messyandmagnetic.workers.dev (optional)."
+    }
+  },
+  "guard_rails": {
+    "vercel_json_rules": [
+      "No legacy `now-*` runtimes",
+      "No `framework` key (Vercel auto-detect)",
+      "If you add rewrites/redirects/headers/cleanUrls/trailingSlash then do NOT include `routes`"
+    ],
+    "actions_rules": [
+      "Workflows that POST to /api/* must be gated because site is static",
+      "If API_BASE is empty or not reachable, skip those jobs instead of failing"
     ]
   },
-  "lending_packet": {
-    "borrowers": {
-      "primary": {"name": "Chanel Marraccini", "phone": "505-249-1419", "email": "YOUR_EMAIL_HERE"},
-      "co": {"name": "Eddie Marraccini", "phone": "505-249-1419", "email": "YOUR_EMAIL_HERE"}
+  "ops": {
+    "telegram": {
+      "enabled": true,
+      "bot_token_secret": "TELEGRAM_BOT_TOKEN",
+      "chat_id_secret": "TELEGRAM_CHAT_ID",
+      "default_prefix": "[Mags]"
     },
-    "properties": [
-      {"address":"9800 San Gabriel Rd NE, Albuquerque, NM 87111","balance":172000,"est_value":446800},
-      {"address":"9308 Claremont Ave NE, Albuquerque, NM 87112","balance":79000,"est_value":259000}
-    ],
-    "loan_preferences": {
-      "products_ranked":["HEL_fixed","HELOC_variable"],
-      "combine_properties": true,
-      "purpose_text": "Purchase undeveloped land in Coyote, NM, and fund initial infrastructure for a small agricultural/community project. Family-owned; repayment from wage income and project revenue."
+    "status_reporting": {
+      "enabled": true,
+      "channels": ["GitHub PR comments", "Telegram (if configured)"]
     }
   }
 }
