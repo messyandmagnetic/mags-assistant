@@ -1,22 +1,30 @@
-name: brain-sync
+name: Brain Sync
 on:
   workflow_dispatch:
   schedule:
-    - cron: '13 7 * * *'
+    - cron: '0 5 * * *'
+permissions:
+  contents: write
 jobs:
   sync:
     runs-on: ubuntu-latest
-    env:
-      GAS_INTAKE_URL: ${{ secrets.GAS_INTAKE_URL }}
-      GAS_READ_URL: ${{ secrets.GAS_READ_URL }}
-      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-      NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
-          node-version: 20.x
-      - run: npm ci
-      - run: node scripts/brain-sync.mjs
+          node-version: '20'
+      - name: Install deps
+        run: npm ci || npm i
+      - name: Run brain sync
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+        run: |
+          node scripts/brain-sync.js
+      - name: Commit brain index (if changed)
+        run: |
+          git config user.name "mags-bot"
+          git config user.email "bot@users.noreply.github.com"
+          git add public/.brain-index.json || true
+          git commit -m "chore(brain): update index" || echo "No changes"
+          git push || true
