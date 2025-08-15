@@ -1,5 +1,9 @@
 import { getConfiguredProviders, getProvider } from "../../../lib/social/index.js";
 import { google } from "googleapis";
+import fs from "fs";
+import path from "path";
+import { createEmotionalRemixes } from "../../../lib/social/emotionalRemix.js";
+import { runBoosterSequence } from "../../../lib/social/booster.js";
 
 export function tiktokEnabled() {
   return !!(
@@ -10,8 +14,35 @@ export function tiktokEnabled() {
 }
 
 export async function scheduleClip() {
-  // Stub: scheduling logic would choose optimal time and update Notion.
-  return { ok: true, scheduled: false };
+  const packPath = path.resolve("public/schedule-pack.json");
+  let pack: any = { queue: [] };
+  try {
+    pack = JSON.parse(fs.readFileSync(packPath, "utf8"));
+  } catch {}
+  const queue: any[] = pack.queue || [];
+  if (queue.length === 0) return { ok: true, scheduled: false };
+
+  const lastSource = pack.lastSourceId;
+  const next = queue.find((q) => !q.scheduled && q.sourceId !== lastSource);
+  if (!next) return { ok: true, scheduled: false };
+
+  const remixes = createEmotionalRemixes(next.sourceId);
+  const now = Date.now();
+  remixes.forEach((r, i) => (r.scheduledTime = now + i * 86400000));
+  next.remixes = remixes;
+  next.scheduledTime = remixes[0].scheduledTime;
+  next.scheduled = true;
+  pack.lastSourceId = next.sourceId;
+
+  const booster = await runBoosterSequence({
+    postId: next.id,
+    url: next.url || "",
+    caption: next.caption,
+  });
+  next.booster = { ...booster, done: booster.liked && booster.commented };
+
+  fs.writeFileSync(packPath, JSON.stringify(pack, null, 2));
+  return { ok: true, scheduled: true };
 }
 
 export async function crossPostClip(params: {

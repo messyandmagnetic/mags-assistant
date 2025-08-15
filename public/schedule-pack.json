@@ -1,5 +1,16 @@
 {
   "generated_at": "2024-01-01T00:00:00Z",
   "worker": "https://tight-snow-2840.messyandmagnetic.workers.dev",
-  "queue": []
+  "queue": [
+    {
+      "id": "demo1",
+      "sourceId": "raw123",
+      "emotion": "funny",
+      "sound": "trending-001",
+      "cover": "/assets/demo1.jpg",
+      "scheduledTime": "2024-01-01T12:00:00Z",
+      "booster": { "done": false },
+      "autoPost": true
+    }
+  ]
 }
