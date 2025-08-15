@@ -29,7 +29,7 @@ DRIVE_ID = os.getenv("DRIVE_FOLDER_ID", "1m-OjLhXttfS655ldGJxr9xFOqsWY25sD")
 RAW_DIR = Path("Raw Clips")
 STAGING_DIR = Path("Staging")
 LOG_PATH = Path("public/mags-log.json")
-PACK_PATH = Path("public/schedule-pack.json")
+PACK_PATH = Path(".schedule-pack.json")
 WORKER_URL = "https://tight-snow-2840.messyandmagnetic.workers.dev"
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
@@ -90,8 +90,7 @@ def send_preview(entry: Dict[str, Any], clip_path: Path) -> None:
     chat = os.getenv("TELEGRAM_CHAT_ID")
     if not token or not chat:
         return
-    thumb = clip_path.with_suffix(".jpg")
-    subprocess.run(["ffmpeg", "-y", "-i", str(clip_path), "-ss", "0", "-vframes", "1", str(thumb)], check=True)
+    thumb = Path(entry.get("cover_frame", clip_path.with_suffix(".jpg")))
     caption = (
         f"{entry.get('emoji', '')} {entry['title']}\n{entry['caption']}\n{' '.join(entry['hashtags'])}\n{entry['suggested_time']}"
     ).strip()
@@ -111,19 +110,24 @@ def send_preview(entry: Dict[str, Any], clip_path: Path) -> None:
             )
         except Exception as e:
             print("telegram send failed", e)
-    thumb.unlink(missing_ok=True)
 
 
 def enqueue_clip(entry: Dict[str, Any]) -> None:
     pack = load_pack()
     trend = fetch_trend()
     suggested = datetime.utcnow() + timedelta(hours=1)
+    clip_path = Path(entry["clip"])
+    thumb = clip_path.with_suffix(".jpg")
+    subprocess.run(["ffmpeg", "-y", "-i", str(clip_path), "-ss", "0", "-vframes", "1", str(thumb)], check=True)
     queue_entry = {
-        "slug": Path(entry["clip"]).stem,
+        "fileId": entry.get("source", clip_path.stem),
+        "slug": clip_path.stem,
         "title": " ".join(entry.get("keywords", [])) or "Clip",
         "caption": " ".join(entry.get("keywords", [])),
         "hashtags": ["#" + k for k in entry.get("keywords", [])],
         "suggested_time": suggested.isoformat() + "Z",
+        "cover_frame": str(thumb),
+        "platformHints": {},
         "emoji": entry.get("overlay"),
         "trend_audio": trend.get("sound"),
         "status": "queued",
@@ -133,7 +137,7 @@ def enqueue_clip(entry: Dict[str, Any]) -> None:
     pack["generated_at"] = datetime.utcnow().isoformat() + "Z"
     pack.setdefault("worker", WORKER_URL)
     save_pack(pack)
-    send_preview(queue_entry, Path(entry["clip"]))
+    send_preview(queue_entry, clip_path)
 
 
 def get_duration(path: Path) -> float:
