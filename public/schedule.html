@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>MagsConnected Schedule</title>
+  <link rel="stylesheet" href="/brand.css" />
+</head>
+<body>
+  <h1>MagsConnected Video Schedule</h1>
+  <ul id="queue"></ul>
+  <script>
+    fetch('/schedule-pack.json')
+      .then(r => r.json())
+      .then(data => {
+        const list = document.getElementById('queue');
+        data.queue.forEach(item => {
+          const li = document.createElement('li');
+          li.textContent = `${item.publish_at} – ${item.title}`;
+          list.appendChild(li);
+        });
+      });
+  </script>
+</body>
+</html>

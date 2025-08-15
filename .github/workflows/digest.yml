@@ -1,0 +1,17 @@
+name: digest
+on:
+  schedule:
+    - cron: '0 18 * * *'
+  workflow_dispatch:
+
+jobs:
+  daily:
+    runs-on: ubuntu-latest
+    env:
+      API_BASE: ${{ secrets.WORKER_URL }}
+      FETCH_PASS: ${{ secrets.WORKER_KEY }}
+    steps:
+      - name: Worker daily digest
+        run: |
+          if [ -z "$API_BASE" ]; then echo "missing API_BASE, skipping"; exit 0; fi
+          curl -sS -X POST "$API_BASE/digest/daily" -H "X-Fetch-Pass: $FETCH_PASS" || true
