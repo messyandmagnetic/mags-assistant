@@ -2,7 +2,8 @@ name: Drive Watch
 
 on:
   schedule:
-    - cron: '*/5 * * * *'
+    # Check Drive for new videos every five minutes
+    - cron: "*/5 * * * *"
   workflow_dispatch:
 
 jobs:

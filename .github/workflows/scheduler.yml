@@ -1,58 +1,68 @@
-name: Clip Scheduler
+name: Schedule Preview
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
 
 jobs:
-  scheduler:
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v4
         with:
           python-version: '3.x'
-      - name: Install dependencies
-        run: pip install requests
-      - name: Process schedule queue
+      - name: Generate schedule preview
         env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
           TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           python - <<'PY'
-import json, os, pathlib, datetime, requests
-pack_path = pathlib.Path('public/schedule-pack.json')
-if not pack_path.exists():
-    raise SystemExit('schedule-pack.json not found')
-pack = json.load(pack_path.open())
-now = datetime.datetime.utcnow()
-token = os.environ.get('TELEGRAM_BOT_TOKEN')
-chat = os.environ.get('TELEGRAM_CHAT_ID')
-session = os.environ.get('TIKTOK_SESSION')
-changed = False
+import json, os, datetime, pathlib, requests
+pack_path = pathlib.Path('.schedule-pack.json')
+html_path = pathlib.Path('public/schedule.html')
+pack = json.loads(pack_path.read_text()) if pack_path.exists() else {"queue": []}
+# build simple preview page
+html_lines = ['<html><body><h1>Schedule Preview</h1>']
 for item in pack.get('queue', []):
-    status = item.get('status', 'queued')
-    if status != 'queued':
-        continue
+    html_lines.append(f"<div><img src='{item.get('cover_frame','')}' width='200'><p>{item.get('caption','')}</p></div>")
+html_lines.append('</body></html>')
+html_path.parent.mkdir(parents=True, exist_ok=True)
+html_path.write_text('\n'.join(html_lines))
+# gather stats for tomorrow
+now = datetime.date.today()
+tomorrow = now + datetime.timedelta(days=1)
+count = 0
+for item in pack.get('queue', []):
     t = item.get('suggested_time')
     if not t:
         continue
     try:
-        ts = datetime.datetime.fromisoformat(t.replace('Z', '+00:00'))
+        ts = datetime.datetime.fromisoformat(t.replace('Z','+00:00'))
     except ValueError:
         continue
-    if ts <= now:
-        if session:
-            item['status'] = 'posted'
-        else:
-            if token and chat:
-                text = f"Preview: {item.get('title')}";
-                requests.post(f'https://api.telegram.org/bot{token}/sendMessage', json={'chat_id': chat, 'text': text})
-            item['status'] = 'ready'
-        changed = True
-if changed:
-    pack['generated_at'] = now.isoformat() + 'Z'
-    pack_path.write_text(json.dumps(pack, indent=2))
+    if ts.date() == tomorrow:
+        count += 1
+# send telegram summary
+token = os.environ.get('TELEGRAM_BOT_TOKEN')
+chat = os.environ.get('TELEGRAM_CHAT_ID')
+if token and chat:
+    link = f"https://raw.githubusercontent.com/{os.environ['GITHUB_REPOSITORY']}/main/public/schedule.html"
+    text = f"{count} videos queued for tomorrow\n{link}"
+    requests.post(f'https://api.telegram.org/bot{token}/sendMessage', json={'chat_id': chat, 'text': text})
+# optional: skip posting if session cookie missing
+if not os.environ.get('TIKTOK_SESSION'):
+    print('TikTok session not set; skipping auto-post')
 PY
+      - name: Commit schedule
+        run: |
+          if ! git diff --quiet; then
+            git config user.name github-actions
+            git config user.email github-actions@github.com
+            git add public/schedule.html .schedule-pack.json
+            git commit -m "chore: update schedule preview" || true
+            git push
+          fi
