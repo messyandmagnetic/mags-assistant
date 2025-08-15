@@ -23,5 +23,16 @@ jobs:
           DRIVE_FOLDER_ID: ${{ secrets.GDRIVE_FOLDER_ID }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TIKTOK_SESSION_COOKIE: ${{ secrets.TIKTOK_SESSION_COOKIE }}
+          BOOSTER_COOKIE: ${{ secrets.BOOSTER_COOKIE }}
         run: |
           python scripts/extract_clips.py
+      - name: Generate schedule preview
+        run: cp schedule-preview.html public/schedule.html
+      - name: Commit schedule
+        run: |
+          git config user.name 'github-actions'
+          git config user.email 'github-actions@users.noreply.github.com'
+          git add .schedule-pack.json public/schedule.html
+          git commit -m 'chore: update schedule' || echo 'no changes'
+          git push

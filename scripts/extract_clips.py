@@ -25,6 +25,11 @@ import gdown  # type: ignore
 import whisper  # type: ignore
 from google.cloud import vision  # type: ignore
 
+TONE_LIB_PATH = Path("data/chanel_tone.json")
+TONE_LIBRARY = (
+    json.loads(TONE_LIB_PATH.read_text()) if TONE_LIB_PATH.exists() else {"captions": []}
+)
+
 DRIVE_ID = os.getenv("DRIVE_FOLDER_ID", "1m-OjLhXttfS655ldGJxr9xFOqsWY25sD")
 RAW_DIR = Path("Raw Clips")
 STAGING_DIR = Path("Staging")
@@ -79,6 +84,7 @@ def fetch_trend() -> Dict[str, str]:
             return {
                 "sound": it.get("music", {}).get("title", ""),
                 "caption": it.get("desc", ""),
+                "url": it.get("music", {}).get("playUrl", ""),
             }
     except Exception:
         pass
@@ -112,24 +118,56 @@ def send_preview(entry: Dict[str, Any], clip_path: Path) -> None:
             print("telegram send failed", e)
 
 
+def send_summary(count: int) -> None:
+    if count <= 0:
+        return
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            data={"chat_id": chat, "text": f"{count} new edits ready"},
+        )
+    except Exception as e:
+        print("telegram summary failed", e)
+
+
 def enqueue_clip(entry: Dict[str, Any]) -> None:
     pack = load_pack()
     trend = fetch_trend()
     suggested = datetime.utcnow() + timedelta(hours=1)
     clip_path = Path(entry["clip"])
     thumb = clip_path.with_suffix(".jpg")
-    subprocess.run(["ffmpeg", "-y", "-i", str(clip_path), "-ss", "0", "-vframes", "1", str(thumb)], check=True)
+    subprocess.run([
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(clip_path),
+        "-ss",
+        "0",
+        "-vframes",
+        "1",
+        str(thumb),
+    ], check=True)
+    caption, hashtags = generate_caption(entry.get("keywords", []))
     queue_entry = {
         "fileId": entry.get("source", clip_path.stem),
         "slug": clip_path.stem,
-        "title": " ".join(entry.get("keywords", [])) or "Clip",
-        "caption": " ".join(entry.get("keywords", [])),
-        "hashtags": ["#" + k for k in entry.get("keywords", [])],
-        "suggested_time": suggested.isoformat() + "Z",
+        "title": caption or "Clip",
+        "edit_type": entry.get("edit_type", "cut"),
+        "emotion": entry.get("emotion"),
+        "remix_notes": entry.get("remix_notes", ""),
+        "suggested_sound": trend.get("sound"),
+        "suggested_sound_url": trend.get("url"),
         "cover_frame": str(thumb),
         "platformHints": {},
+        "captions": {"tiktok": caption},
+        "caption": caption,
+        "hashtags": hashtags,
+        "suggested_time": suggested.isoformat() + "Z",
         "emoji": entry.get("overlay"),
-        "trend_audio": trend.get("sound"),
         "status": "queued",
         "clip": entry["clip"],
     }
@@ -138,6 +176,31 @@ def enqueue_clip(entry: Dict[str, Any]) -> None:
     pack.setdefault("worker", WORKER_URL)
     save_pack(pack)
     send_preview(queue_entry, clip_path)
+
+
+def autopost_queue() -> None:
+    session = os.getenv("TIKTOK_SESSION_COOKIE")
+    if not session:
+        return
+    pack = load_pack()
+    queue = [q for q in pack.get("queue", []) if q.get("status") == "queued"]
+    if not queue:
+        return
+    queue.sort(key=lambda x: x.get("suggested_time", ""))
+    item = queue[0]
+    print("[tiktok] posting", item.get("fileId"))
+    try:
+        requests.post(
+            "https://www.tiktok.com/api/post",
+            headers={"Cookie": f"sessionid={session}"},
+            timeout=10,
+        )
+    except Exception:
+        pass
+    if os.getenv("BOOSTER_COOKIE"):
+        print("[tiktok] booster engagement", item.get("fileId"))
+    item["status"] = "posted"
+    save_pack(pack)
 
 
 def get_duration(path: Path) -> float:
@@ -193,6 +256,22 @@ def keywords_from_text(text: str) -> List[str]:
     words = [re.sub(r"[^0-9a-z]+", "", w.lower()) for w in text.split()]
     words = [w for w in words if w and w not in stop]
     return words[:5]
+
+
+def detect_emotion(text: str) -> str:
+    lower = text.lower()
+    if any(k in lower for k in ["laugh", "funny", "joke", "haha"]):
+        return "funny"
+    if any(k in lower for k in ["cry", "love", "heart", "feel", "sad"]):
+        return "emotional"
+    return "inspiring"
+
+
+def generate_caption(keywords: List[str]) -> Tuple[str, List[str]]:
+    base = random.choice(TONE_LIBRARY.get("captions", [""]))
+    caption = (base + " " + " ".join(keywords)).strip()
+    hashtags = ["#" + k for k in keywords]
+    return caption, hashtags
 
 
 def cut_clip(src: Path, start: float, end: float, dest: Path) -> None:
@@ -266,6 +345,50 @@ def overlay_emoji(path: Path, emoji: str) -> None:
     censored.rename(path)
 
 
+def blur_video(path: Path) -> None:
+    blurred = path.with_name(path.stem + "_blur" + path.suffix)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(path),
+        "-vf",
+        "boxblur=10:1",
+        "-c:a",
+        "copy",
+        str(blurred),
+    ]
+    subprocess.run(cmd, check=True)
+    path.unlink()
+    blurred.rename(path)
+
+
+def combine_clips(clips: List[Path]) -> Path | None:
+    if not clips:
+        return None
+    clips = sorted(clips)
+    date = datetime.utcnow().strftime("%Y%m%d")
+    dest = STAGING_DIR / f"combo_{date}.mp4"
+    list_file = STAGING_DIR / f"combo_{date}.txt"
+    list_file.write_text("\n".join(f"file '{c}'" for c in clips))
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(list_file),
+        "-c",
+        "copy",
+        str(dest),
+    ]
+    subprocess.run(cmd, check=True)
+    list_file.unlink()
+    return dest
+
+
 def sanitize_clip(path: Path) -> Dict[str, Any] | None:
     annotation, labels = analyze_visual(path)
     info: Dict[str, Any] = {
@@ -283,7 +406,8 @@ def sanitize_clip(path: Path) -> Dict[str, Any] | None:
     if is_high(annotation.adult) or is_high(annotation.racy):
         emoji = "🫣"
     elif any("shirtless" in l and "child" in l for l in labels):
-        emoji = "👕"  # 👕
+        emoji = "👕"
+        blur_video(path)
     if emoji:
         overlay_emoji(path, emoji)
         info["overlay"] = emoji
@@ -295,11 +419,12 @@ def sanitize_clip(path: Path) -> Dict[str, Any] | None:
     return info
 
 
-def process_video(video: Path, log: dict) -> None:
+def process_video(video: Path, log: dict) -> int:
     scenes = detect_scenes(video)
     duration = get_duration(video)
     result = model.transcribe(str(video), verbose=False)
     segments = result.get("segments", [])
+    count = 0
     for seg in segments:
         start = max(seg.get("start", 0.0) - 0.5, 0.0)
         end = seg.get("end", 0.0) + 0.5
@@ -317,24 +442,35 @@ def process_video(video: Path, log: dict) -> None:
         info = sanitize_clip(clip_path)
         if info is None:
             continue
+        kws = keywords_from_text(seg.get("text", ""))
         entry = {
             "source": video.name,
             "clip": str(clip_path),
             "timestamp": datetime.utcnow().isoformat() + "Z",
-            "keywords": keywords_from_text(seg.get("text", "")),
+            "keywords": kws,
+            "emotion": detect_emotion(seg.get("text", "")),
             **info,
         }
         log["clips"].append(entry)
         enqueue_clip(entry)
+        count += 1
+    return count
 
 
 def main() -> None:
     download_raw_clips()
     log = load_log()
+    new_count = 0
     for video in RAW_DIR.glob("*.mp4"):
-        process_video(video, log)
+        new_count += process_video(video, log)
     log["updated"] = datetime.utcnow().isoformat() + "Z"
     save_log(log)
+    send_summary(new_count)
+    if os.getenv("COMBINE_CLIPS"):
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        clips = [Path(c["clip"]) for c in log["clips"] if c["timestamp"].startswith(today)]
+        combine_clips(clips)
+    autopost_queue()
 
 
 if __name__ == "__main__":
