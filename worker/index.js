@@ -6,6 +6,7 @@ import {
   getShareableProfile,
   buildExportPacket,
 } from '../lib/profile.ts';
+import { loadMemory, logLearning } from '../lib/memory.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -44,21 +45,25 @@ export default {
       const key = env.GEMINI_API_KEY;
       if (!key) return { ok: false, error: 'MISSING_GEMINI_API_KEY' };
       try {
+        const memory = loadMemory();
+        const fullPrompt = `Maggie's memory:\n${JSON.stringify(memory)}\n\nUser prompt:\n${prompt}`;
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
           {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              contents: [{ role: 'user', parts: [{ text: fullPrompt }] }],
             }),
           }
         );
         const data = await res.json();
         const text =
           data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
+        logLearning({ prompt, response: text });
         return { ok: true, text };
       } catch (e) {
+        logLearning({ prompt, error: e.message });
         return { ok: false, error: 'GEMINI_ERROR' };
       }
     };
