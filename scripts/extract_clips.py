@@ -2,9 +2,10 @@
 """Extract engaging clips from raw footage stored on Google Drive.
 
 This script downloads videos from the "Raw Clips" folder on Drive and uses
-Whisper and FFmpeg to detect speech and visual spikes. It automatically cuts
-punchy 5–15 second clips, saves them to the local ``Staging/`` directory and
-logs each extraction to ``public/mags-log.json``.
+Whisper, Google Vision, and simple scene detection to surface viral moments.
+Any clip that contains shirtless children or other TikTok-risky visuals is
+automatically covered with an emoji rather than deleted. Metadata for every
+clip is written to ``public/mags-log.json``.
 """
 
 from __future__ import annotations
@@ -15,13 +16,13 @@ import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, List
+from typing import Iterable, List, Tuple, Dict, Any
 
 import gdown  # type: ignore
 import whisper  # type: ignore
 from google.cloud import vision  # type: ignore
 
-DRIVE_ID = "1m-OjLhXttfS655ldGJxr9xFOqsWY25sD"
+DRIVE_ID = os.getenv("DRIVE_FOLDER_ID", "1m-OjLhXttfS655ldGJxr9xFOqsWY25sD")
 RAW_DIR = Path("Raw Clips")
 STAGING_DIR = Path("Staging")
 LOG_PATH = Path("public/mags-log.json")
@@ -133,12 +134,23 @@ def pick_boundary(points: Iterable[float], t: float, default: float, reverse: bo
     return pts[-1] if reverse else pts[0]
 
 
-def safe_search(path: Path) -> vision.SafeSearchAnnotation:
+def analyze_visual(path: Path) -> Tuple[vision.SafeSearchAnnotation, List[str]]:
+    """Return safe-search annotation and label descriptions."""
     with path.open("rb") as f:
         content = f.read()
     image = vision.Image(content=content)
-    response = vision_client.safe_search_detection(image=image)
-    return response.safe_search_annotation
+    response = vision_client.annotate_image(
+        {
+            "image": image,
+            "features": [
+                {"type": vision.Feature.Type.SAFE_SEARCH_DETECTION},
+                {"type": vision.Feature.Type.LABEL_DETECTION, "max_results": 10},
+            ],
+        }
+    )
+    annotation = response.safe_search_annotation
+    labels = [lab.description.lower() for lab in response.label_annotations]
+    return annotation, labels
 
 
 def is_high(flag: vision.Likelihood) -> bool:
@@ -149,8 +161,8 @@ def is_mild(flag: vision.Likelihood) -> bool:
     return flag == vision.Likelihood.POSSIBLE
 
 
-def censor_clip(path: Path) -> None:
-    emoji = os.getenv("CENSOR_EMOJI", "🙈")
+def overlay_emoji(path: Path, emoji: str) -> None:
+    """Overlay ``emoji`` on ``path`` using ffmpeg."""
     censored = path.with_name(path.stem + "_censored" + path.suffix)
     cmd = [
         "ffmpeg",
@@ -168,26 +180,33 @@ def censor_clip(path: Path) -> None:
     censored.rename(path)
 
 
-def sanitize_clip(path: Path) -> bool:
-    annotation = safe_search(path)
-    reasons = [
-        k
-        for k, v in {
-            "adult": annotation.adult,
-            "violence": annotation.violence,
-            "racy": annotation.racy,
-        }.items()
-        if is_high(v)
-    ]
-    if reasons:
+def sanitize_clip(path: Path) -> Dict[str, Any] | None:
+    annotation, labels = analyze_visual(path)
+    info: Dict[str, Any] = {
+        "safe_search": {
+            "adult": int(annotation.adult),
+            "violence": int(annotation.violence),
+            "racy": int(annotation.racy),
+            "labels": labels,
+        }
+    }
+    if is_high(annotation.violence):
         path.unlink(missing_ok=True)
-        return False
-    if any(
-        is_mild(v)
-        for v in [annotation.adult, annotation.violence, annotation.racy]
+        return None
+    emoji = None
+    if is_high(annotation.adult) or is_high(annotation.racy):
+        emoji = "🫣"
+    elif any("shirtless" in l and "child" in l for l in labels):
+        emoji = "👕"  # 👕
+    if emoji:
+        overlay_emoji(path, emoji)
+        info["overlay"] = emoji
+    elif any(
+        is_mild(v) for v in [annotation.adult, annotation.violence, annotation.racy]
     ):
-        censor_clip(path)
-    return True
+        overlay_emoji(path, "🫣")
+        info["overlay"] = "🫣"
+    return info
 
 
 def process_video(video: Path, log: dict) -> None:
@@ -209,14 +228,17 @@ def process_video(video: Path, log: dict) -> None:
         clip_name = f"{video.stem}_{int(start*1000):06d}-{int(end*1000):06d}.mp4"
         clip_path = STAGING_DIR / clip_name
         cut_clip(video, start, end, clip_path)
+        info = sanitize_clip(clip_path)
+        if info is None:
+            continue
         entry = {
             "source": video.name,
             "clip": str(clip_path),
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "keywords": keywords_from_text(seg.get("text", "")),
+            **info,
         }
-        if sanitize_clip(clip_path):
-            log["clips"].append(entry)
+        log["clips"].append(entry)
 
 
 def main() -> None:
@@ -224,6 +246,7 @@ def main() -> None:
     log = load_log()
     for video in RAW_DIR.glob("*.mp4"):
         process_video(video, log)
+    log["updated"] = datetime.utcnow().isoformat() + "Z"
     save_log(log)
 
 
