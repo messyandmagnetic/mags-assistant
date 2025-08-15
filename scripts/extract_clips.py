@@ -19,6 +19,7 @@ from typing import Iterable, List
 
 import gdown  # type: ignore
 import whisper  # type: ignore
+from google.cloud import vision  # type: ignore
 
 DRIVE_ID = "1m-OjLhXttfS655ldGJxr9xFOqsWY25sD"
 RAW_DIR = Path("Raw Clips")
@@ -27,6 +28,12 @@ LOG_PATH = Path("public/mags-log.json")
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 model = whisper.load_model(WHISPER_MODEL)
+SERVICE_ACCOUNT = os.getenv("GOOGLE_SERVICE_ACCOUNT_JSON")
+vision_client = (
+    vision.ImageAnnotatorClient.from_service_account_json(SERVICE_ACCOUNT)
+    if SERVICE_ACCOUNT
+    else vision.ImageAnnotatorClient()
+)
 
 
 def download_raw_clips() -> None:
@@ -126,6 +133,41 @@ def pick_boundary(points: Iterable[float], t: float, default: float, reverse: bo
     return pts[-1] if reverse else pts[0]
 
 
+def safe_search(path: Path) -> vision.SafeSearchAnnotation:
+    with path.open("rb") as f:
+        content = f.read()
+    image = vision.Image(content=content)
+    response = vision_client.safe_search_detection(image=image)
+    return response.safe_search_annotation
+
+
+def is_high(flag: vision.Likelihood) -> bool:
+    return flag in (vision.Likelihood.LIKELY, vision.Likelihood.VERY_LIKELY)
+
+
+def is_mild(flag: vision.Likelihood) -> bool:
+    return flag == vision.Likelihood.POSSIBLE
+
+
+def censor_clip(path: Path) -> None:
+    emoji = os.getenv("CENSOR_EMOJI", "🙈")
+    censored = path.with_name(path.stem + "_censored" + path.suffix)
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(path),
+        "-vf",
+        f"drawtext=text='{emoji}':fontcolor=white:fontsize=64:x=(w-text_w)/2:y=(h-text_h)/2",
+        "-codec:a",
+        "copy",
+        str(censored),
+    ]
+    subprocess.run(cmd, check=True)
+    path.unlink()
+    censored.rename(path)
+
+
 def process_video(video: Path, log: dict) -> None:
     scenes = detect_scenes(video)
     duration = get_duration(video)
@@ -145,12 +187,40 @@ def process_video(video: Path, log: dict) -> None:
         clip_name = f"{video.stem}_{int(start*1000):06d}-{int(end*1000):06d}.mp4"
         clip_path = STAGING_DIR / clip_name
         cut_clip(video, start, end, clip_path)
+        annotation = safe_search(clip_path)
+        flags = {
+            "adult": annotation.adult.name,
+            "violence": annotation.violence.name,
+            "racy": annotation.racy.name,
+        }
         entry = {
             "source": video.name,
             "clip": str(clip_path),
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "keywords": keywords_from_text(seg.get("text", "")),
+            "safe_search": flags,
         }
+        reasons = [
+            k
+            for k, v in {
+                "adult": annotation.adult,
+                "violence": annotation.violence,
+                "racy": annotation.racy,
+            }.items()
+            if is_high(v)
+        ]
+        if reasons:
+            entry["action"] = "skipped"
+            entry["reason"] = reasons
+            log["clips"].append(entry)
+            clip_path.unlink(missing_ok=True)
+            continue
+        if any(
+            is_mild(v)
+            for v in [annotation.adult, annotation.violence, annotation.racy]
+        ):
+            censor_clip(clip_path)
+            entry["action"] = "censored"
         log["clips"].append(entry)
 
 
