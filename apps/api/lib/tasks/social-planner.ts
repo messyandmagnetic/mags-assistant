@@ -1,5 +1,17 @@
+import {
+  buildSchedule,
+  logScheduleToSheet,
+  buildGmailFilters,
+} from '../../../../lib/social/tiktokScheduler.js';
+
 export async function refreshSocialPlanner() {
-  // Placeholder: later read a Notion database or Google Sheet for content ideas
-  // For now just report a heartbeat to prove scheduler runs.
-  return { name: "social.refresh_planner", ok: true, msg: "heartbeat" };
+  const schedule = await buildSchedule();
+  await logScheduleToSheet(schedule);
+  const filters = await buildGmailFilters();
+  return {
+    name: 'social.refresh_planner',
+    ok: true,
+    scheduled: schedule.length,
+    filters,
+  };
 }

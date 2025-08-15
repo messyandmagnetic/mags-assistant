@@ -1,3 +1,5 @@
+import { loadAccounts, humanizeDelay } from '../tiktokScheduler.js';
+
 export async function post({
   caption,
   mediaUrl,
@@ -9,27 +11,23 @@ export async function post({
   linkUrl?: string;
   scheduleTime?: number;
 }) {
-  if (process.env.OFFLINE_MODE === 'true') {
-    console.log('[tiktok] offline mode — skipping external calls');
-    return 'offline';
-  }
-  if (process.env.SCHEDULER === 'tiktok_api') {
-    if (!process.env.TIKTOK_ACCESS_TOKEN) {
-      console.log('[tiktok] TikTok token missing');
-      return 'token_missing';
+  const accounts = await loadAccounts();
+  for (const acct of accounts) {
+    if (process.env.OFFLINE_MODE === 'true') {
+      console.log(`[tiktok:${acct.username}] offline mode — skipping external calls`);
+      continue;
     }
-    console.log('[tiktok] schedule via API', {
-      caption,
-      mediaUrl,
-      scheduleTime,
-    });
-    // Real implementation would upload and schedule using TikTok Business API.
-    return 'scheduled';
+    if (scheduleTime) {
+      console.log(`[tiktok:${acct.username}] schedule`, { caption, mediaUrl, scheduleTime });
+    } else {
+      await new Promise((r) => setTimeout(r, humanizeDelay()));
+      console.log(`[tiktok:${acct.username}] post`, {
+        caption,
+        mediaUrl,
+        linkUrl,
+        session: acct.id,
+      });
+    }
   }
-  if (!process.env.TIKTOK_ACCESS_TOKEN) {
-    console.log('[tiktok] not configured');
-    return 'not_configured';
-  }
-  console.log('[tiktok] post', { caption, mediaUrl, linkUrl });
   return 'ok';
 }
