@@ -5,27 +5,74 @@
   <title>Mags Schedule Preview</title>
   <style>
     body { font-family: sans-serif; }
-    li { margin-bottom: 1em; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #ccc; padding: 4px; text-align: left; }
   </style>
 </head>
 <body>
   <h1>Queued Clips</h1>
-  <ul id="queue"></ul>
+  <button id="auto-btn"></button>
+  <table>
+    <thead>
+      <tr>
+        <th>Details</th>
+        <th>Assigned Account</th>
+      </tr>
+    </thead>
+    <tbody id="queue"></tbody>
+  </table>
   <script>
-    fetch('../.schedule-pack.json')
-      .then(r => r.json())
-      .then(data => {
-        const ul = document.getElementById('queue');
-        data.queue.forEach(item => {
-          const li = document.createElement('li');
-          const emoji = item.emoji ? item.emoji + ' ' : '';
-          const sound = item.suggested_sound_url ? `<a href="${item.suggested_sound_url}">${item.suggested_sound}</a>` : (item.suggested_sound || '');
-          const caps = item.captions && item.captions.tiktok ? item.captions.tiktok : '';
-          const tags = item.hashtags ? item.hashtags.join(' ') : '';
-          li.innerHTML = `${emoji}<strong>${item.edit_type || ''}</strong> [${item.emotion || ''}] - ${caps} ${tags} ${sound}`;
-          ul.appendChild(li);
+    const accountMap = {};
+
+    fetch('tiktok_usernames.json')
+      .then(r => (r.ok ? r.json() : {}))
+      .then(m => Object.assign(accountMap, m))
+      .finally(loadSchedule)
+      .catch(loadSchedule);
+
+    function loadSchedule() {
+      fetch('../.schedule-pack.json')
+        .then(r => r.json())
+        .then(data => {
+          const tbody = document.getElementById('queue');
+          data.queue.forEach(item => {
+            const tr = document.createElement('tr');
+            const emoji = item.emoji ? item.emoji + ' ' : '';
+            const sound = item.suggested_sound_url ? `<a href="${item.suggested_sound_url}">${item.suggested_sound}</a>` : (item.suggested_sound || '');
+            const caps = item.captions && item.captions.tiktok ? item.captions.tiktok : '';
+            const tags = item.hashtags ? item.hashtags.join(' ') : '';
+            const details = `${emoji}<strong>${item.edit_type || ''}</strong> [${item.emotion || ''}] - ${caps} ${tags} ${sound}`;
+            const tdDetails = document.createElement('td');
+            tdDetails.innerHTML = details;
+
+            const tdAccount = document.createElement('td');
+            const role = item.booster || (item.sourceId ? 'main' : null);
+            const username = role && accountMap[role];
+            if (role) {
+              tdAccount.textContent = username ? `@${username}` : role;
+            } else {
+              tdAccount.textContent = 'Unassigned';
+            }
+
+            tr.appendChild(tdDetails);
+            tr.appendChild(tdAccount);
+            tbody.appendChild(tr);
+          });
         });
-      });
+    }
+
+    let auto = localStorage.getItem('auto') === 'true';
+    const autoBtn = document.getElementById('auto-btn');
+    function updateAutoButton() {
+      autoBtn.textContent = auto ? 'Disable Auto' : 'Enable Auto';
+    }
+    updateAutoButton();
+    function toggleAuto() {
+      auto = !auto;
+      localStorage.setItem('auto', auto);
+      updateAutoButton();
+    }
+    autoBtn.addEventListener('click', toggleAuto);
   </script>
 </body>
 </html>
