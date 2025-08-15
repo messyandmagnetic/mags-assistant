@@ -235,6 +235,14 @@ def bulk_update_profiles() -> None:
         "Sage",
         "Nico",
         "Kira",
+        "Zara",
+        "Indie",
+        "Lux",
+        "Nova",
+        "Bex",
+        "Finn",
+        "Remy",
+        "Kai",
     ]
     bios = [
         "currently soft launching my chaos ☁️",
@@ -242,9 +250,14 @@ def bulk_update_profiles() -> None:
         "posting unhinged things and calling it art",
         "just vibing on the internet",
         "here for a good time, not a long time",
+        "collecting moments not things ✨",
+        "emotionally invested in my coffee",
+        "half feral, half vibe curator",
+        "screaming into the aesthetic void",
+        "spilling tea then meditating about it",
     ]
     used_names: set[str] = set()
-    for role, session in sessions.items():
+    for role, session in random.sample(list(sessions.items()), len(sessions)):
         if role in {"MAIN", "ALT"}:
             continue
         info: Dict[str, Any] = {}
@@ -268,7 +281,8 @@ def bulk_update_profiles() -> None:
         def is_default(name: str) -> bool:
             return not name or name.lower().startswith("user")
 
-        if not is_default(nickname) and signature:
+        force_update = role.lower() == "messy.mars4"
+        if not force_update and not is_default(nickname) and signature:
             print(f"[tiktok] skip {role} (custom profile)")
             continue
         available = [n for n in names if n not in used_names] or [f"user{random.randint(1000,9999)}"]
@@ -276,7 +290,7 @@ def bulk_update_profiles() -> None:
         used_names.add(name)
         bio = random.choice(bios)
         image_url = None
-        if not has_image:
+        if not has_image and not force_update:
             image_url = f"https://i.pravatar.cc/300?u={random.randint(1000,9999)}"
         update_profile(session, name, bio, image_url)
         time.sleep(random.uniform(1, 3))
