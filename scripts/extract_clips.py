@@ -18,6 +18,18 @@ from datetime import datetime
 from pathlib import Path
 from typing import Iterable, List, Tuple, Dict, Any
 
+try:  # optional heavy deps; script still runs if missing
+    import cv2  # type: ignore
+except Exception:  # pragma: no cover - dependency is optional
+    cv2 = None  # type: ignore
+
+try:  # Google Vision may not be installed
+    from google.cloud import vision  # type: ignore
+except Exception:  # pragma: no cover
+    vision = None  # type: ignore
+
+import urllib.request
+
 import gdown  # type: ignore
 import whisper  # type: ignore
 from google.cloud import vision  # type: ignore
@@ -125,6 +137,101 @@ def cut_clip(src: Path, start: float, end: float, dest: Path) -> None:
         str(dest),
     ]
     subprocess.run(cmd, check=True)
+
+
+def telegram_notify(text: str) -> None:
+    """Send a Telegram message if credentials are present."""
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    data = json.dumps({"chat_id": chat, "text": text}).encode("utf-8")
+    req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
+    try:
+        urllib.request.urlopen(req, timeout=10)
+    except Exception:
+        pass
+
+
+def detect_risky_content(path: Path) -> bool:
+    """Return True if ``path`` appears to contain risky visuals."""
+    # Prefer Google Vision SafeSearch when available
+    if vision is not None:  # pragma: no cover - requires external service
+        client = vision.ImageAnnotatorClient()
+        try:
+            with open(path, "rb") as f:
+                content = f.read()
+            image = vision.Image(content=content)
+            response = client.safe_search_detection(image=image)
+            safe = response.safe_search_annotation
+            likelihood = {4, 5}  # LIKELY or VERY_LIKELY
+            if (
+                getattr(safe, "adult", 0) in likelihood
+                or getattr(safe, "violence", 0) in likelihood
+                or getattr(safe, "racy", 0) in likelihood
+            ):
+                return True
+        except Exception:
+            pass
+
+    if cv2 is None:  # OpenCV not installed
+        return False
+
+    cap = cv2.VideoCapture(str(path))
+    if not cap.isOpened():
+        return False
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    step = max(frame_count // 10, 1)
+    idx = 0
+    risky = 0
+    total = 0
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            break
+        if idx % step == 0:
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            lower = (0, 40, 60)
+            upper = (20, 150, 255)
+            mask = cv2.inRange(hsv, lower, upper)
+            ratio = float(cv2.countNonZero(mask)) / float(mask.size)
+            if ratio > 0.4:  # large amount of exposed skin
+                risky += 1
+            total += 1
+        idx += 1
+    cap.release()
+    return total > 0 and (risky / total) > 0.3
+
+
+def blur_video(path: Path) -> None:
+    """Blur the entire video in-place using ffmpeg."""
+    tmp = path.with_suffix(".blur.mp4")
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-i",
+        str(path),
+        "-vf",
+        "boxblur=10:1",
+        str(tmp),
+    ]
+    subprocess.run(cmd, check=True)
+    tmp.replace(path)
+
+
+def sanitize_clip(path: Path, entry: dict) -> bool:
+    """Blur risky clips. Return False if clip should be skipped."""
+    if detect_risky_content(path):
+        try:
+            blur_video(path)
+            entry["fix"] = "blurred"
+            return True
+        except Exception:
+            path.unlink(missing_ok=True)
+            telegram_notify(f"skipped {path.name}: risky and unsalvageable")
+            return False
+    return True
 
 
 def pick_boundary(points: Iterable[float], t: float, default: float, reverse: bool = False) -> float:
@@ -238,7 +345,8 @@ def process_video(video: Path, log: dict) -> None:
             "keywords": keywords_from_text(seg.get("text", "")),
             **info,
         }
-        log["clips"].append(entry)
+        if sanitize_clip(clip_path, entry):
+            log["clips"].append(entry)
 
 
 def main() -> None:
