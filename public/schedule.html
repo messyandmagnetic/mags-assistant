@@ -15,7 +15,8 @@
         const list = document.getElementById('queue');
         data.queue.forEach(item => {
           const li = document.createElement('li');
-          li.textContent = `${item.publish_at} – ${item.title}`;
+          const tags = (item.hashtags || []).join(' ');
+          li.textContent = `${item.suggested_time} – ${item.title} – ${item.caption || ''} ${tags}`.trim();
           list.appendChild(li);
         });
       });
