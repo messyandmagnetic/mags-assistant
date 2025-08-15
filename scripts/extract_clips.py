@@ -198,6 +198,90 @@ def load_sessions() -> Dict[str, str]:
     return sessions
 
 
+def update_profile(
+    session_id: str,
+    name: str,
+    bio: str,
+    image_url: str | None = None,
+    gender: str | None = None,
+) -> None:
+    payload: Dict[str, Any] = {"nickname": name, "signature": bio}
+    if gender is not None:
+        payload["gender"] = gender
+    if image_url:
+        payload["avatar_url"] = image_url
+    try:
+        time.sleep(random.uniform(0.5, 1.5))
+        resp = requests.post(
+            "https://www.tiktok.com/api/edit/profile/",
+            headers={"Cookie": f"sessionid={session_id}"},
+            json=payload,
+            timeout=10,
+        )
+        resp.raise_for_status()
+        print(f"[tiktok] profile updated for {name}")
+    except Exception as e:
+        print(f"[tiktok] profile update failed for {name}: {e}")
+
+
+def bulk_update_profiles() -> None:
+    sessions = load_sessions()
+    names = [
+        "Lena",
+        "Rory",
+        "Jules",
+        "Mara",
+        "Piper",
+        "Sage",
+        "Nico",
+        "Kira",
+    ]
+    bios = [
+        "currently soft launching my chaos ☁️",
+        "accidentally documenting my life arc",
+        "posting unhinged things and calling it art",
+        "just vibing on the internet",
+        "here for a good time, not a long time",
+    ]
+    used_names: set[str] = set()
+    for role, session in sessions.items():
+        if role in {"MAIN", "ALT"}:
+            continue
+        info: Dict[str, Any] = {}
+        has_image = True
+        nickname = ""
+        signature = ""
+        try:
+            resp = requests.get(
+                "https://www.tiktok.com/api/user/info/",
+                headers={"Cookie": f"sessionid={session}"},
+                timeout=10,
+            )
+            if resp.ok:
+                info = resp.json().get("user", {})
+                nickname = info.get("nickname", "")
+                signature = info.get("signature", "")
+                has_image = bool(info.get("avatar_medium", {}).get("url_list"))
+        except Exception:
+            pass
+
+        def is_default(name: str) -> bool:
+            return not name or name.lower().startswith("user")
+
+        if not is_default(nickname) and signature:
+            print(f"[tiktok] skip {role} (custom profile)")
+            continue
+        available = [n for n in names if n not in used_names] or [f"user{random.randint(1000,9999)}"]
+        name = random.choice(available)
+        used_names.add(name)
+        bio = random.choice(bios)
+        image_url = None
+        if not has_image:
+            image_url = f"https://i.pravatar.cc/300?u={random.randint(1000,9999)}"
+        update_profile(session, name, bio, image_url)
+        time.sleep(random.uniform(1, 3))
+
+
 def _parse_time(ts: str | None) -> datetime | None:
     if not ts:
         return None
@@ -577,6 +661,7 @@ def process_video(video: Path, log: dict) -> int:
 
 
 def main() -> None:
+    bulk_update_profiles()
     download_raw_clips()
     log = load_log()
     new_count = 0
