@@ -189,11 +189,11 @@ def _load_usernames() -> Dict[str, str]:
     return {}
 
 
-def _load_sessions() -> Dict[str, str]:
+def load_sessions() -> Dict[str, str]:
     sessions: Dict[str, str] = {}
     for k, v in os.environ.items():
         if k.startswith("TIKTOK_SESSION_") and v:
-            role = k[len("TIKTOK_SESSION_") :].lower()
+            role = k[len("TIKTOK_SESSION_") :]
             sessions[role] = v
     return sessions
 
@@ -270,11 +270,11 @@ def booster_engage(item: Dict[str, Any], boosters: Dict[str, str], usernames: Di
 
 
 def autopost_queue() -> None:
-    sessions = _load_sessions()
-    usernames = _load_usernames()
-    main_session = sessions.get("main")
-    if not main_session:
+    sessions = load_sessions()
+    if "MAIN" not in sessions:
         return
+    usernames = _load_usernames()
+    main_session = sessions["MAIN"]
     pack = load_pack()
     queue = [
         q
@@ -300,7 +300,7 @@ def autopost_queue() -> None:
         )
     except Exception:
         pass
-    boosters = {r: s for r, s in sessions.items() if r != "main"}
+    boosters = {r: s for r, s in sessions.items() if r != "MAIN"}
     if boosters:
         booster_engage(item, boosters, usernames)
     item["status"] = "posted"
