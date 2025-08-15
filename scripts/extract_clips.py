@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import random
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Tuple, Dict, Any
@@ -35,6 +36,7 @@ RAW_DIR = Path("Raw Clips")
 STAGING_DIR = Path("Staging")
 LOG_PATH = Path("public/mags-log.json")
 PACK_PATH = Path(".schedule-pack.json")
+USERNAME_PATH = Path("config/tiktok_usernames.json")
 WORKER_URL = "https://tight-snow-2840.messyandmagnetic.workers.dev"
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
@@ -178,29 +180,146 @@ def enqueue_clip(entry: Dict[str, Any]) -> None:
     send_preview(queue_entry, clip_path)
 
 
+def _load_usernames() -> Dict[str, str]:
+    if USERNAME_PATH.exists():
+        try:
+            return json.loads(USERNAME_PATH.read_text())
+        except Exception:
+            return {}
+    return {}
+
+
+def _load_sessions() -> Dict[str, str]:
+    sessions: Dict[str, str] = {}
+    for k, v in os.environ.items():
+        if k.startswith("TIKTOK_SESSION_") and v:
+            role = k[len("TIKTOK_SESSION_") :].lower()
+            sessions[role] = v
+    return sessions
+
+
+def _parse_time(ts: str | None) -> datetime | None:
+    if not ts:
+        return None
+    try:
+        if ts.endswith("Z"):
+            ts = ts[:-1] + "+00:00"
+        return datetime.fromisoformat(ts)
+    except ValueError:
+        return None
+
+
+COMMENTS = {
+    "humor": ["😂", "lol this is great", "🤣"],
+    "support": ["love this", "so good", "🔥"],
+    "questions": ["how??", "where is this?", "more please"]
+}
+
+
+def booster_engage(item: Dict[str, Any], boosters: Dict[str, str], usernames: Dict[str, str]) -> None:
+    emotion = item.get("emotion")
+    for role, session in boosters.items():
+        uname = usernames.get(role, f"@{role}")
+        print(f"[tiktok] booster {role} ({uname}) engage")
+        # like
+        try:
+            requests.post(
+                "https://www.tiktok.com/api/like",
+                headers={"Cookie": f"sessionid={session}"},
+                timeout=10,
+            )
+        except Exception:
+            pass
+        # maybe comment
+        if random.random() < 0.7:
+            cat = {
+                "funny": "humor",
+                "emotional": "support",
+            }.get(emotion, random.choice(list(COMMENTS.keys())))
+            comment = random.choice(COMMENTS[cat])
+            try:
+                requests.post(
+                    "https://www.tiktok.com/api/comment",
+                    headers={"Cookie": f"sessionid={session}"},
+                    json={"text": comment},
+                    timeout=10,
+                )
+            except Exception:
+                pass
+        # maybe save
+        if random.random() < 0.5:
+            try:
+                requests.post(
+                    "https://www.tiktok.com/api/save",
+                    headers={"Cookie": f"sessionid={session}"},
+                    timeout=10,
+                )
+            except Exception:
+                pass
+        # maybe follow
+        if random.random() < 0.3:
+            try:
+                requests.post(
+                    "https://www.tiktok.com/api/follow",
+                    headers={"Cookie": f"sessionid={session}"},
+                    timeout=10,
+                )
+            except Exception:
+                pass
+        time.sleep(random.uniform(1, 4))
+
+
 def autopost_queue() -> None:
-    session = os.getenv("TIKTOK_SESSION_COOKIE")
-    if not session:
+    sessions = _load_sessions()
+    usernames = _load_usernames()
+    main_session = sessions.get("main")
+    if not main_session:
         return
     pack = load_pack()
-    queue = [q for q in pack.get("queue", []) if q.get("status") == "queued"]
-    if not queue:
+    queue = [
+        q
+        for q in pack.get("queue", [])
+        if q.get("status") == "queued" and q.get("autopost")
+    ]
+    now = datetime.utcnow()
+    ready = []
+    for q in queue:
+        ts = _parse_time(q.get("scheduled_time")) or _parse_time(q.get("suggested_time"))
+        if ts and ts <= now:
+            ready.append(q)
+    if not ready:
         return
-    queue.sort(key=lambda x: x.get("suggested_time", ""))
-    item = queue[0]
+    ready.sort(key=lambda x: x.get("scheduled_time") or x.get("suggested_time") or "")
+    item = ready[0]
     print("[tiktok] posting", item.get("fileId"))
     try:
         requests.post(
             "https://www.tiktok.com/api/post",
-            headers={"Cookie": f"sessionid={session}"},
+            headers={"Cookie": f"sessionid={main_session}"},
             timeout=10,
         )
     except Exception:
         pass
-    if os.getenv("BOOSTER_COOKIE"):
-        print("[tiktok] booster engagement", item.get("fileId"))
+    boosters = {r: s for r, s in sessions.items() if r != "main"}
+    if boosters:
+        booster_engage(item, boosters, usernames)
     item["status"] = "posted"
+    item["posted_at"] = now.isoformat() + "Z"
     save_pack(pack)
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat = os.getenv("TELEGRAM_CHAT_ID")
+    if token and chat:
+        roles = {r: usernames.get(r, f"@{r}") for r in sessions}
+        msg = "TikTok autopost complete\n" + "\n".join(
+            f"{role}: {name}" for role, name in roles.items()
+        )
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendMessage",
+                data={"chat_id": chat, "text": msg},
+            )
+        except Exception:
+            pass
 
 
 def get_duration(path: Path) -> float:
