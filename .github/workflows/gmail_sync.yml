@@ -1,12 +1,12 @@
-name: digest
+name: gmail_sync
 
 on:
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 0,12 * * *'
   workflow_dispatch:
 
 jobs:
-  daily:
+  sync:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -15,17 +15,18 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-      - name: Daily grants digest
+      - name: Gmail land sync
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: node scripts/grants-digest.mjs
-      - name: Commit digest snapshot
+          GMAIL_ACCESS_TOKEN: ${{ secrets.GMAIL_ACCESS_TOKEN }}
+          GMAIL_APPS_SCRIPT_URL: ${{ secrets.GMAIL_APPS_SCRIPT_URL }}
+          CF_WORKER_NAME: ${{ secrets.CF_WORKER_NAME }}
+        run: node scripts/gmail-land-sync.mjs
+      - name: Commit inbox snapshot
         run: |
           git config user.name github-actions
           git config user.email github-actions@github.com
-          git add public/.grants-digest.json
-          git commit -m "chore: update grants digest" || echo "no changes"
+          git add public/.inbox-land.json
+          git commit -m "chore: update inbox" || echo "no changes"
           git push
       - name: Send run log to Telegram
         if: secrets.TELEGRAM_BOT_TOKEN != '' && secrets.TELEGRAM_CHAT_ID != ''
@@ -35,4 +36,4 @@ jobs:
         run: |
           curl -fsS "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
             -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="digest run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            -d text="gmail_sync run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
