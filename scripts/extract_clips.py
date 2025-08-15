@@ -15,6 +15,7 @@ import os
 import re
 import subprocess
 import random
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Tuple, Dict, Any
@@ -177,10 +178,92 @@ def enqueue_clip(entry: Dict[str, Any]) -> None:
     save_pack(pack)
     send_preview(queue_entry, clip_path)
 
+def load_usernames() -> Dict[str, str]:
+    path = Path("config/tiktok_usernames.json")
+    if path.exists():
+        return json.loads(path.read_text())
+    return {}
+
+
+def load_sessions() -> Dict[str, str]:
+    sessions: Dict[str, str] = {}
+    prefix = "TIKTOK_SESSION_"
+    for key, val in os.environ.items():
+        if key.startswith(prefix) and val:
+            role = key[len(prefix):].upper()
+            sessions[role] = val
+    return sessions
+
+
+COMMENTS = {
+    "humor": ["lol \U0001F602", "haha amazing", "\U0001F602 love this"],
+    "support": ["so proud!", "\U0001F44F", "you got this"],
+    "questions": ["wait what?", "tell me more?", "how did you do this?"],
+    "default": ["love this!", "nice \u2728", "great post"],
+}
+
+
+def pick_comment(emotion: str | None) -> str:
+    pool = COMMENTS.get(emotion or "", COMMENTS["default"])
+    return random.choice(pool)
+
+
+def engage_boosters(item: Dict[str, Any], boosters: Dict[str, str]) -> None:
+    usernames = load_usernames()
+    for role, session in boosters.items():
+        uname = usernames.get(role.lower(), role)
+        print(f"[tiktok] booster {role.lower()} engaging as {uname}")
+        actions = ["like"]
+        if random.random() < 0.8:
+            actions.append("save")
+        if random.random() < 0.6:
+            actions.append("comment")
+        if random.random() < 0.4:
+            actions.append("follow")
+        for act in actions:
+            time.sleep(random.uniform(1, 3))
+            payload: Dict[str, Any] = {"action": act, "target": item.get("fileId")}
+            if act == "comment":
+                payload["text"] = pick_comment(item.get("emotion"))
+            try:
+                requests.post(
+                    "https://www.tiktok.com/api/engage",
+                    headers={"Cookie": f"sessionid={session}"},
+                    json=payload,
+                    timeout=10,
+                )
+            except Exception:
+                continue
+        time.sleep(random.uniform(2, 5))
+
+
+def send_rotation_log(item: Dict[str, Any], sessions: Dict[str, str]) -> None:
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    usernames = load_usernames()
+    main_name = usernames.get("main", "main")
+    boosters = [usernames.get(r.lower(), r.lower()) for r in sessions if r != "MAIN"]
+    text = (
+        f"TikTok autopost complete\n"
+        f"Posted: {item.get('fileId')}\n"
+        f"Main: {main_name}\n"
+        f"Boosters: {', '.join(boosters)}"
+    )
+    try:
+        requests.post(
+            f"https://api.telegram.org/bot{token}/sendMessage",
+            json={"chat_id": chat, "text": text},
+            timeout=10,
+        )
+    except Exception:
+        pass
+
 
 def autopost_queue() -> None:
-    session = os.getenv("TIKTOK_SESSION_COOKIE")
-    if not session:
+    sessions = load_sessions()
+    if "MAIN" not in sessions:
         return
     pack = load_pack()
     queue = [q for q in pack.get("queue", []) if q.get("status") == "queued"]
@@ -188,19 +271,24 @@ def autopost_queue() -> None:
         return
     queue.sort(key=lambda x: x.get("suggested_time", ""))
     item = queue[0]
+    if not item.get("autopost"):
+        print("[tiktok] preview", item.get("fileId"))
+        return
     print("[tiktok] posting", item.get("fileId"))
     try:
         requests.post(
             "https://www.tiktok.com/api/post",
-            headers={"Cookie": f"sessionid={session}"},
+            headers={"Cookie": f"sessionid={sessions['MAIN']}"},
             timeout=10,
         )
     except Exception:
         pass
-    if os.getenv("BOOSTER_COOKIE"):
-        print("[tiktok] booster engagement", item.get("fileId"))
+    boosters = {k: v for k, v in sessions.items() if k != "MAIN"}
+    if boosters:
+        engage_boosters(item, boosters)
     item["status"] = "posted"
     save_pack(pack)
+    send_rotation_log(item, sessions)
 
 
 def get_duration(path: Path) -> float:

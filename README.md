@@ -292,7 +292,9 @@ Early support for generating short-form video drafts from a Google Drive inbox a
 - `TELEGRAM_BOT_TOKEN` / `TELEGRAM_CHAT_ID` – send approval previews.
 - `BROWSERLESS_KEY` – headless browser for TikTok/Instagram scheduling.
 - `YT_CLIENT_ID` / `YT_CLIENT_SECRET` / `YT_REFRESH_TOKEN` – YouTube uploads.
-- `TIKTOK_SESSION_COOKIE` – TikTok session with access to trending sounds.
+- `TIKTOK_SESSION_<ROLE>` – TikTok session IDs for autoposting and boosters.
+  Example roles: `TIKTOK_SESSION_MAIN`, `TIKTOK_SESSION_ALT`,
+  `TIKTOK_SESSION_MAGGIE`, `TIKTOK_SESSION_MARS`.
 - `IG_SESSION_COOKIE` – Instagram session for selecting trending audio.
 
 ## Google Sheets cleanup and forwarding
