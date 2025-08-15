@@ -14,9 +14,12 @@ import json
 import os
 import re
 import subprocess
-from datetime import datetime
+import random
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Iterable, List, Tuple, Dict, Any
+
+import requests  # type: ignore
 
 import gdown  # type: ignore
 import whisper  # type: ignore
@@ -26,6 +29,8 @@ DRIVE_ID = os.getenv("DRIVE_FOLDER_ID", "1m-OjLhXttfS655ldGJxr9xFOqsWY25sD")
 RAW_DIR = Path("Raw Clips")
 STAGING_DIR = Path("Staging")
 LOG_PATH = Path("public/mags-log.json")
+PACK_PATH = Path("public/schedule-pack.json")
+WORKER_URL = "https://tight-snow-2840.messyandmagnetic.workers.dev"
 
 WHISPER_MODEL = os.getenv("WHISPER_MODEL", "small")
 model = whisper.load_model(WHISPER_MODEL)
@@ -52,6 +57,83 @@ def load_log() -> dict:
 def save_log(data: dict) -> None:
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     LOG_PATH.write_text(json.dumps(data, indent=2))
+
+
+def load_pack() -> dict:
+    if PACK_PATH.exists():
+        return json.loads(PACK_PATH.read_text())
+    return {"generated_at": datetime.utcnow().isoformat() + "Z", "worker": WORKER_URL, "queue": []}
+
+
+def save_pack(data: dict) -> None:
+    PACK_PATH.parent.mkdir(parents=True, exist_ok=True)
+    PACK_PATH.write_text(json.dumps(data, indent=2))
+
+
+def fetch_trend() -> Dict[str, str]:
+    try:
+        resp = requests.get("https://www.tiktok.com/api/trending/item_list/?count=30", timeout=10)
+        items = resp.json().get("itemList", [])
+        if items:
+            it = random.choice(items)
+            return {
+                "sound": it.get("music", {}).get("title", ""),
+                "caption": it.get("desc", ""),
+            }
+    except Exception:
+        pass
+    return {}
+
+
+def send_preview(entry: Dict[str, Any], clip_path: Path) -> None:
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat:
+        return
+    thumb = clip_path.with_suffix(".jpg")
+    subprocess.run(["ffmpeg", "-y", "-i", str(clip_path), "-ss", "0", "-vframes", "1", str(thumb)], check=True)
+    caption = (
+        f"{entry.get('emoji', '')} {entry['title']}\n{entry['caption']}\n{' '.join(entry['hashtags'])}\n{entry['suggested_time']}"
+    ).strip()
+    buttons = {
+        "inline_keyboard": [[
+            {"text": "Approve", "callback_data": f"approve:{entry['slug']}"},
+            {"text": "Edit Caption", "callback_data": f"edit:{entry['slug']}"},
+            {"text": "Skip", "callback_data": f"skip:{entry['slug']}"},
+        ]]
+    }
+    with thumb.open("rb") as img:
+        try:
+            requests.post(
+                f"https://api.telegram.org/bot{token}/sendPhoto",
+                data={"chat_id": chat, "caption": caption, "reply_markup": json.dumps(buttons)},
+                files={"photo": img},
+            )
+        except Exception as e:
+            print("telegram send failed", e)
+    thumb.unlink(missing_ok=True)
+
+
+def enqueue_clip(entry: Dict[str, Any]) -> None:
+    pack = load_pack()
+    trend = fetch_trend()
+    suggested = datetime.utcnow() + timedelta(hours=1)
+    queue_entry = {
+        "slug": Path(entry["clip"]).stem,
+        "title": " ".join(entry.get("keywords", [])) or "Clip",
+        "caption": " ".join(entry.get("keywords", [])),
+        "hashtags": ["#" + k for k in entry.get("keywords", [])],
+        "suggested_time": suggested.isoformat() + "Z",
+        "emoji": entry.get("overlay"),
+        "trend_audio": trend.get("sound"),
+        "status": "queued",
+        "clip": entry["clip"],
+    }
+    pack.setdefault("queue", []).append(queue_entry)
+    pack["generated_at"] = datetime.utcnow().isoformat() + "Z"
+    pack.setdefault("worker", WORKER_URL)
+    save_pack(pack)
+    send_preview(queue_entry, Path(entry["clip"]))
 
 
 def get_duration(path: Path) -> float:
@@ -239,6 +321,7 @@ def process_video(video: Path, log: dict) -> None:
             **info,
         }
         log["clips"].append(entry)
+        enqueue_clip(entry)
 
 
 def main() -> None:

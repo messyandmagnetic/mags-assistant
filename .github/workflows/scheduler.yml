@@ -1,0 +1,58 @@
+name: Clip Scheduler
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+
+jobs:
+  scheduler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: pip install requests
+      - name: Process schedule queue
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TIKTOK_SESSION: ${{ secrets.TIKTOK_SESSION }}
+        run: |
+          python - <<'PY'
+import json, os, pathlib, datetime, requests
+pack_path = pathlib.Path('public/schedule-pack.json')
+if not pack_path.exists():
+    raise SystemExit('schedule-pack.json not found')
+pack = json.load(pack_path.open())
+now = datetime.datetime.utcnow()
+token = os.environ.get('TELEGRAM_BOT_TOKEN')
+chat = os.environ.get('TELEGRAM_CHAT_ID')
+session = os.environ.get('TIKTOK_SESSION')
+changed = False
+for item in pack.get('queue', []):
+    status = item.get('status', 'queued')
+    if status != 'queued':
+        continue
+    t = item.get('suggested_time')
+    if not t:
+        continue
+    try:
+        ts = datetime.datetime.fromisoformat(t.replace('Z', '+00:00'))
+    except ValueError:
+        continue
+    if ts <= now:
+        if session:
+            item['status'] = 'posted'
+        else:
+            if token and chat:
+                text = f"Preview: {item.get('title')}";
+                requests.post(f'https://api.telegram.org/bot{token}/sendMessage', json={'chat_id': chat, 'text': text})
+            item['status'] = 'ready'
+        changed = True
+if changed:
+    pack['generated_at'] = now.isoformat() + 'Z'
+    pack_path.write_text(json.dumps(pack, indent=2))
+PY
