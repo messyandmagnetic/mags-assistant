@@ -168,6 +168,28 @@ def censor_clip(path: Path) -> None:
     censored.rename(path)
 
 
+def sanitize_clip(path: Path) -> bool:
+    annotation = safe_search(path)
+    reasons = [
+        k
+        for k, v in {
+            "adult": annotation.adult,
+            "violence": annotation.violence,
+            "racy": annotation.racy,
+        }.items()
+        if is_high(v)
+    ]
+    if reasons:
+        path.unlink(missing_ok=True)
+        return False
+    if any(
+        is_mild(v)
+        for v in [annotation.adult, annotation.violence, annotation.racy]
+    ):
+        censor_clip(path)
+    return True
+
+
 def process_video(video: Path, log: dict) -> None:
     scenes = detect_scenes(video)
     duration = get_duration(video)
@@ -187,41 +209,14 @@ def process_video(video: Path, log: dict) -> None:
         clip_name = f"{video.stem}_{int(start*1000):06d}-{int(end*1000):06d}.mp4"
         clip_path = STAGING_DIR / clip_name
         cut_clip(video, start, end, clip_path)
-        annotation = safe_search(clip_path)
-        flags = {
-            "adult": annotation.adult.name,
-            "violence": annotation.violence.name,
-            "racy": annotation.racy.name,
-        }
         entry = {
             "source": video.name,
             "clip": str(clip_path),
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "keywords": keywords_from_text(seg.get("text", "")),
-            "safe_search": flags,
         }
-        reasons = [
-            k
-            for k, v in {
-                "adult": annotation.adult,
-                "violence": annotation.violence,
-                "racy": annotation.racy,
-            }.items()
-            if is_high(v)
-        ]
-        if reasons:
-            entry["action"] = "skipped"
-            entry["reason"] = reasons
+        if sanitize_clip(clip_path):
             log["clips"].append(entry)
-            clip_path.unlink(missing_ok=True)
-            continue
-        if any(
-            is_mild(v)
-            for v in [annotation.adult, annotation.violence, annotation.racy]
-        ):
-            censor_clip(clip_path)
-            entry["action"] = "censored"
-        log["clips"].append(entry)
 
 
 def main() -> None:
