@@ -11,6 +11,7 @@ import { stripeAudit } from "./stripe-audit";
 import { outreachRun } from "./outreach";
 import { socialGenerateDrafts } from "./social-drafts";
 import { updateCoyoteSummary } from "./coyote-summary";
+import { runDailyLearningCycle } from "./daily-learning";
 
 export type TaskResult = { name: string; ok: boolean; msg?: string };
 export type TaskFn = () => Promise<TaskResult>;
@@ -28,6 +29,7 @@ export const tasks: Record<string, TaskFn> = {
   "stripe.audit": stripeAudit,
   "outreach.run": outreachRun,
   "coyote.summary": updateCoyoteSummary,
+  "social.daily_learning": runDailyLearningCycle,
 };
 
 const taskFlags: Record<string, string> = {
@@ -43,6 +45,7 @@ const taskFlags: Record<string, string> = {
   "stripe.audit": "TASK_STRIPE_AUDIT",
   "outreach.run": "TASK_OUTREACH_RUN",
   "coyote.summary": "TASK_COYOTE_SUMMARY",
+  "social.daily_learning": "TASK_DAILY_LEARNING",
 };
 
 export async function runTasks(selected?: string[]) {
