@@ -1,0 +1,17 @@
+name: tally-cleanup
+on:
+  schedule:
+    - cron: '30 2 * * 0'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    env:
+      API_BASE: ${{ secrets.WORKER_URL }}
+      FETCH_PASS: ${{ secrets.WORKER_KEY }}
+    steps:
+      - name: Cleanup Tally sheets
+        run: |
+          if [ -z "$API_BASE" ]; then echo "missing API_BASE, skipping"; exit 0; fi
+          curl -sS -X POST "$API_BASE/tally/cleanup" -H "X-Fetch-Pass: $FETCH_PASS" || true

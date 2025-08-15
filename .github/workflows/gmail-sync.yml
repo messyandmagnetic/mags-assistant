@@ -1,0 +1,21 @@
+name: gmail-sync
+on:
+  schedule:
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      API_BASE: ${{ secrets.WORKER_URL }}
+      FETCH_PASS: ${{ secrets.WORKER_KEY }}
+    steps:
+      - name: Land outreach scan
+        run: |
+          if [ -z "$API_BASE" ]; then echo "missing API_BASE, skipping"; exit 0; fi
+          curl -sS -X POST "$API_BASE/land/scan" -H "X-Fetch-Pass: $FETCH_PASS" || true
+      - name: Land outreach summary
+        run: |
+          if [ -z "$API_BASE" ]; then echo "missing API_BASE, skipping"; exit 0; fi
+          curl -sS -X POST "$API_BASE/land/summary" -H "X-Fetch-Pass: $FETCH_PASS" || true
