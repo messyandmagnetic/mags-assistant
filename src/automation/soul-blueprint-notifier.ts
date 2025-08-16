@@ -2,6 +2,7 @@ import cron from 'node-cron';
 import { getSheets } from '../../lib/google.js';
 import { sendEmail } from '../../lib/gmail.ts';
 import { tgSend } from '../../lib/telegram.ts';
+import { getEnv } from '../env.local';
 
 export interface SoulOrderEnv {
   SHEET_ID?: string; // Spreadsheet ID for "Soul Blueprint Orders – Messy & Magnetic™"
@@ -81,7 +82,7 @@ async function logError(sheetId: string | undefined, source: string, message: st
   try {
     const sheets = await getSheets();
     await sheets.spreadsheets.values.append({
-      spreadsheetId: sheetId || process.env.SHEET_ID!,
+      spreadsheetId: sheetId || getEnv('SHEET_ID'),
       range: `${LOG_SHEET}!A:C`,
       valueInputOption: 'USER_ENTERED',
       requestBody: { values: [[new Date().toISOString(), source, message]] },

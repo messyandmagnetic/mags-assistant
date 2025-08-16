@@ -2,6 +2,7 @@ import chokidar from 'chokidar';
 import fs from 'fs';
 import path from 'path';
 import { appendRows } from '../../lib/google.js';
+import { getEnv } from '../env.local';
 
 export interface RawTrackerEnv {
   RAW_DROP_PATH?: string; // local path to Raw Footage Drop Folder
@@ -70,8 +71,8 @@ function classify(filePath: string): { type: string; emotion: string } {
 // Allow running as a standalone script
 if (require.main === module) {
   startRawTracker({
-    RAW_DROP_PATH: process.env.RAW_DROP_PATH,
-    SHEET_ID: process.env.SHEET_ID,
+    RAW_DROP_PATH: getEnv('RAW_DROP_PATH'),
+    SHEET_ID: getEnv('SHEET_ID'),
   });
 }
 
