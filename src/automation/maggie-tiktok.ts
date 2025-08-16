@@ -1,9 +1,29 @@
 import puppeteer from 'puppeteer-core';
-import { startRawWatcher, WatcherEnv } from './watch-raw';
-import { startFlopCron, FlopEnv } from './flop-cron';
-import { monitorBrowserless, FallbackEnv } from './fallback-monitor';
+import {
+  fetchRawFiles, renameFiles, extractEmotionKeywords,
+  appendRow, fetchRows, colorCodeRow, renderVideo,
+  uploadToTikTok, sendTelegram, findFlops,
+  fetchTrending, cleanup
+} from './maggie-utils';
 
-export interface TikTokAutomationEnv extends WatcherEnv, FlopEnv, FallbackEnv {}
+import {
+  startRawWatcher, WatcherEnv, schedulePosts,
+  SchedulerEnv, startFlopCron, FlopEnv,
+  monitorBrowserless, FallbackEnv
+} from './maggie-tasks';
+
+export interface TikTokAutomationEnv extends
+  WatcherEnv,
+  SchedulerEnv,
+  FlopEnv,
+  FallbackEnv {
+  DRIVE_FOLDER_ID?: string;         // Raw folder
+  DRIVE_FINAL_FOLDER_ID?: string;   // Final folder
+  SHEET_ID?: string;                // Tracker sheet
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
+  BROWSERLESS_URL?: string;
+}
 
 interface QueueItem {
   id: string;
@@ -14,6 +34,13 @@ interface QueueItem {
 
 class PostQueue {
   private items: QueueItem[] = [];
+  private failures: { id: string; ts: number }[] = [];
+
+  constructor(private onRetreat: () => Promise<void>) {}
+
+  enqueue(item: QueueItem) {
+    this.items.push(item);
+  }
 
   next(): QueueItem | undefined {
     return this.items.shift();
@@ -26,7 +53,19 @@ class PostQueue {
 
   markFailed(id: string) {
     console.log(`❌ Failed ${id}`);
+    this.failures.push({ id, ts: Date.now() });
+    this.retreatTrigger();
     // TODO: update Google Sheet tracker on failure
+  }
+
+  private async retreatTrigger() {
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const cutoff = Date.now() - sevenDays;
+    const recent = this.failures.filter(f => f.ts >= cutoff);
+    if (recent.length >= 3) {
+      await this.onRetreat();
+      this.failures = [];
+    }
   }
 }
 
@@ -45,7 +84,8 @@ async function generateCaptionFromEmotion(emotion) {
  * Methods delegate to specialized modules in this folder.
  */
 export class MaggieTikTokAutomation {
-  private queue = new PostQueue();
+  private paused = false;
+  private queue = new PostQueue(() => this.retreatMode());
 
   constructor(private env: TikTokAutomationEnv) {}
 
@@ -54,6 +94,7 @@ export class MaggieTikTokAutomation {
    * Monitor Google Drive folder for new videos and analyze content.
    */
   async watchFolder(): Promise<void> {
+    await fetchRawFiles();
     startRawWatcher(this.env);
   }
 
@@ -62,6 +103,11 @@ export class MaggieTikTokAutomation {
    * Post videos from the final folder to TikTok.
    */
   async scheduleTikToks(): Promise<void> {
+    if (this.paused) {
+      console.log('Retreat mode active. Skipping scheduling.');
+      return;
+    }
+
     const next = this.queue.next();
     if (!next) {
       console.log('No videos queued.');
@@ -71,7 +117,7 @@ export class MaggieTikTokAutomation {
     console.log(`📅 Scheduling video: ${next.filename}`);
 
     try {
-      const browser = await puppeteer.connect({ browserWSEndpoint: process.env.BROWSERLESS_URL });
+      const browser = await puppeteer.connect({ browserWSEndpoint: this.env.BROWSERLESS_URL });
       const page = await browser.newPage();
 
       await page.goto("https://www.tiktok.com/upload");
@@ -83,11 +129,15 @@ export class MaggieTikTokAutomation {
 
       // Auto-caption
       const caption = await generateCaptionFromEmotion(next.emotion || "validating");
-      await page.type('textarea[placeholder="Write a caption"]', caption);
 
-      // Emoji overlay or CapCut template flag
       if (next.useCapCut) {
-        await page.evaluate(() => alert("Reminder: apply CapCut template before posting."));
+        try {
+          await page.evaluate(() => (window as any).applyCapCut());
+        } catch (err) {
+          await page.type('textarea[placeholder="Caption"]', `${caption} 😊`);
+        }
+      } else {
+        await page.type('textarea[placeholder="Caption"]', caption);
       }
 
       // Post now or click Schedule if enabled
@@ -109,6 +159,7 @@ export class MaggieTikTokAutomation {
    */
   async detectAndRecoverFlops(): Promise<void> {
     startFlopCron(this.env);
+    await findFlops();
   }
 
   /**
@@ -117,6 +168,11 @@ export class MaggieTikTokAutomation {
    */
   async autoSwitchRenderer(): Promise<void> {
     await monitorBrowserless(this.env);
+  }
+
+  private async retreatMode() {
+    this.paused = true;
+    await sendTelegram(this.env, '📉 Retreat mode triggered');
   }
 
   /**
