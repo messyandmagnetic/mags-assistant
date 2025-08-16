@@ -4,11 +4,18 @@
   "version": "1.0.0",
   "scripts": {
     "prebuild": "node scripts/stamp-health.mjs",
-    "build": "echo 'static site build' "
+    "build": "echo 'static site build' ",
+    "watcher": "ts-node src/automation/watch-raw.ts"
   },
   "engines": { "node": ">=20 <23" },
   "dependencies": {
-    "better-sqlite3": "^9.4.0"
+    "better-sqlite3": "^9.4.0",
+    "chokidar": "^3.5.3",
+    "node-cron": "^3.0.0",
+    "puppeteer-core": "^22.0.0",
+    "axios": "^1.6.8",
+    "googleapis": "^131.0.0",
+    "dotenv": "^16.4.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.5"
