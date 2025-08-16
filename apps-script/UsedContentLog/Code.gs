@@ -111,6 +111,99 @@ function notifyWarning_(face, video, warnings) {
   MailApp.sendEmail(email, subject, body);
 }
 
+function cleanUsedContentLog() {
+  const ss = SpreadsheetApp.openById(SHEET_ID);
+  const sh = ss.getSheetByName('UsedContentLog');
+  if (!sh) return;
+
+  let lastRow = sh.getLastRow();
+  let lastCol = sh.getLastColumn();
+  let duplicatesRemoved = 0;
+  if (lastRow > 1 && lastCol > 0) {
+    duplicatesRemoved = sh.getRange(2, 1, lastRow - 1, lastCol).removeDuplicates();
+  }
+
+  let emptyRowsRemoved = 0;
+  for (let row = sh.getLastRow(); row >= 2; row--) {
+    const values = sh.getRange(row, 1, 1, sh.getLastColumn()).getValues()[0];
+    if (values.every((v) => v === '' || v === null)) {
+      sh.deleteRow(row);
+      emptyRowsRemoved++;
+    }
+  }
+
+  lastRow = sh.getLastRow();
+  lastCol = sh.getLastColumn();
+  let headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  if (headers.indexOf('Emoji') === -1) {
+    sh.getRange(1, lastCol + 1).setValue('Emoji');
+    lastCol++;
+  }
+
+  headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  let oldRowsRemoved = 0;
+  const dateColIndex = headers.indexOf('Date Posted');
+  if (dateColIndex !== -1) {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - 60);
+    for (let row = sh.getLastRow(); row >= 2; row--) {
+      const value = sh.getRange(row, dateColIndex + 1).getValue();
+      const date = value instanceof Date ? value : new Date(value);
+      if (date && !isNaN(date) && date < cutoff) {
+        sh.deleteRow(row);
+        oldRowsRemoved++;
+      }
+    }
+  }
+
+  lastRow = sh.getLastRow();
+  lastCol = sh.getLastColumn();
+  sh.setFrozenRows(1);
+  sh.getBandings().forEach((b) => b.remove());
+  sh.getRange(1, 1, 1, lastCol).setFontWeight('bold').setHorizontalAlignment('center');
+  sh.autoResizeColumns(1, lastCol);
+  sh.getRange(1, 1, lastRow, lastCol).applyRowBanding(SpreadsheetApp.BandingTheme.LIGHT_GREY);
+
+  headers = sh.getRange(1, 1, 1, lastCol).getValues()[0];
+  const resultCol = headers.indexOf('Result (Success, Flop, Needs Reposting)') + 1;
+  const captionCol = headers.indexOf('Caption') + 1;
+  if (resultCol > 0 && captionCol > 0) {
+    const dataRange = sh.getRange(2, 1, lastRow - 1, lastCol);
+    const resultLetter = columnToLetter_(resultCol);
+    const captionLetter = columnToLetter_(captionCol);
+    const flopRule = SpreadsheetApp.newConditionalFormatRule()
+      .setRanges([dataRange])
+      .whenFormulaSatisfied(`=$${resultLetter}2="Flop"`)
+      .setBackground('#f4cccc')
+      .build();
+    const successRule = SpreadsheetApp.newConditionalFormatRule()
+      .setRanges([dataRange])
+      .whenFormulaSatisfied(`=$${resultLetter}2="Success"`)
+      .setBackground('#d9ead3')
+      .build();
+    const needsRule = SpreadsheetApp.newConditionalFormatRule()
+      .setRanges([dataRange])
+      .whenFormulaSatisfied(`=$${resultLetter}2="Needs Reposting"`)
+      .setBackground('#fff2cc')
+      .build();
+    const blankCaptionRule = SpreadsheetApp.newConditionalFormatRule()
+      .setRanges([dataRange])
+      .whenFormulaSatisfied(`=$${captionLetter}2=""`)
+      .setBackground('#d9d9d9')
+      .build();
+    sh.setConditionalFormatRules([flopRule, successRule, needsRule, blankCaptionRule]);
+  }
+
+  const totalRows = sh.getLastRow() - 1;
+  const message =
+    `UsedContentLog cleaned.\n` +
+    `Duplicates removed: ${duplicatesRemoved}\n` +
+    `Rows older than 60 days removed: ${oldRowsRemoved}\n` +
+    `Empty rows removed: ${emptyRowsRemoved}\n` +
+    `Total rows remaining: ${totalRows}`;
+  sendTelegramUpdate(message);
+}
+
 function retryFloppedTikToks() {
   const sheetName = 'UsedContentLog';
   const sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
@@ -136,7 +229,7 @@ function retryFloppedTikToks() {
       sheet.getRange(i + 1, colIndex.reused + 1).setValue('Yes');
       sheet.getRange(i + 1, colIndex.notes + 1).setValue('Retry: ' + suggestion);
 
-      sendTelegramUpdate_(`📉 Post ${postId} flopped.\n\n💡 Suggested fix:\n${suggestion}`);
+      sendTelegramUpdate(`📉 Post ${postId} flopped.\n\n💡 Suggested fix:\n${suggestion}`);
     }
   }
 }
@@ -164,13 +257,9 @@ function callGeminiFixSuggestion_(originalCaption) {
   }
 }
 
-function sendTelegramUpdate_(message) {
+function sendTelegramUpdate(message) {
   const token = PropertiesService.getScriptProperties().getProperty('TELEGRAM_TOKEN');
   const chatId = PropertiesService.getScriptProperties().getProperty('TELEGRAM_CHAT_ID');
   const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`;
-  try {
-    UrlFetchApp.fetch(url);
-  } catch (e) {
-    Logger.log('Telegram error: ' + e);
-  }
+  UrlFetchApp.fetch(url);
 }
