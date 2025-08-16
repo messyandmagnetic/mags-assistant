@@ -3,6 +3,8 @@ export type AgentEnv = any;
 export type AgentResponse = Record<string, any>;
 export type AgentFn = (payload: AgentPayload, env: AgentEnv) => Promise<AgentResponse>;
 
+import { runMaggieTikTokLoop } from '../automation/maggie-tiktok';
+
 const agents: Record<string, AgentFn> = {
   'sync/stripe-to-notion': async (_payload, env) => {
     // fetch Stripe products and prices
@@ -116,6 +118,9 @@ const agents: Record<string, AgentFn> = {
     }
     // placeholder for later logic
     return { ok: true };
+  },
+  'automation/tiktok-loop': async (payload, env) => {
+    return runMaggieTikTokLoop(payload, env);
   },
 };
 
