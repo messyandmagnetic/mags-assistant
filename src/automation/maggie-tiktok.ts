@@ -15,6 +15,7 @@ import {
   monitorBrowserless, FallbackEnv
 } from './maggie-tasks';
 import { localEnv } from '../env.local';
+import { getEnv } from '../lib/get-env';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -106,11 +107,19 @@ class PostQueue {
   }
 
   async markFailed(item: QueueItem, flopDetected = false) {
-    console.log(`❌ Failed ${item.id}`);
+    console.log(`❌ Failed ${item.id}${flopDetected ? ' (flop_final)' : ''}`);
     this.failures.push({ id: item.id, ts: Date.now() });
     await appendRow({
       spreadsheetId: this.env.SHEET_ID,
-      values: [item.filename, new Date().toISOString(), 'failed', item.caption || '', item.emotion || '', !!item.useCapCut, flopDetected],
+      values: [
+        item.filename,
+        new Date().toISOString(),
+        flopDetected ? 'flop_final' : 'failed',
+        item.caption || '',
+        item.emotion || '',
+        !!item.useCapCut,
+        flopDetected,
+      ],
     });
     this.save();
     this.retreatTrigger();
@@ -179,8 +188,14 @@ export class MaggieTikTokAutomation {
     console.log(`📅 Scheduling video: ${next.filename}`);
 
     next.retries = next.retries || 0;
-    if (!next.caption && next.emotion) {
-      next.caption = await generateCaptionFromEmotion(next.emotion);
+    if (next.filename.includes('_nocap')) {
+      next.caption = '';
+    } else if (!next.caption && next.emotion) {
+      if (next.emotion === 'random') {
+        next.caption = await generateCaptionFromEmotion(['soulful', 'funny', 'validating', 'dry'][Math.floor(Math.random()*4)]);
+      } else {
+        next.caption = await generateCaptionFromEmotion(next.emotion);
+      }
     }
 
     const attempt = next.retries;
@@ -213,7 +228,9 @@ export class MaggieTikTokAutomation {
 
       // Caption write
       try {
-        await page.type('textarea[placeholder="Caption"]', next.caption || '');
+        if (next.caption) {
+          await page.type('textarea[placeholder="Caption"]', next.caption);
+        }
       } catch (err) {
         console.error('Caption failed', err);
         await this.queue.markFailed(next, attempt >= 2);
@@ -251,18 +268,22 @@ export class MaggieTikTokAutomation {
 
     const ok = await upload();
     if (!ok) {
-      if (attempt < 2) {
+      if (attempt < 3) {
         next.retries = attempt + 1;
-        console.log(`Retrying ${next.filename} in 10 minutes`);
-        setTimeout(() => this.queue.enqueue(next), 10 * 60 * 1000);
+        const backoff = Math.pow(2, attempt) * 10 * 60 * 1000;
+        console.log(`Retrying ${next.filename} in ${backoff / 60000} minutes`);
+        setTimeout(() => this.queue.enqueue(next), backoff);
       } else {
-        await sendTelegram(this.env, `Upload failed for ${next.filename}`);
+        await this.queue.markFailed(next, true);
+        await sendTelegram(this.env, `flop_final: ${next.filename}`);
         if (this.env.MAKE_FALLBACK_WEBHOOK) {
           try {
-            await axios.post(this.env.MAKE_FALLBACK_WEBHOOK, { type: 'fail', video: next.filename });
+            await axios.post(this.env.MAKE_FALLBACK_WEBHOOK, { type: 'flop_final', video: next.filename });
           } catch (err) {
             console.error('Fallback webhook failed', err);
           }
+        } else {
+          console.warn('Make down? Triggering Codex fallback');
         }
       }
     }
@@ -290,7 +311,12 @@ export class MaggieTikTokAutomation {
 
   private async retreatMode() {
     this.paused = true;
+    ;(global as any).maggie = { status: 'resting' };
     await sendTelegram(this.env, '📉 Retreat mode triggered');
+    try {
+      // @ts-ignore codex task
+      await (global as any).codex?.tasks?.healMaggie?.();
+    } catch {}
   }
 
   /**
@@ -307,15 +333,23 @@ export class MaggieTikTokAutomation {
 
 export async function runMaggieTikTokLoop(payload: Record<string, any>, env: TikTokAutomationEnv = {} as TikTokAutomationEnv) {
   const mergedEnv: TikTokAutomationEnv = {
-    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || localEnv.TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID: env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_CHAT_ID || localEnv.TELEGRAM_CHAT_ID,
-    SHEET_ID: env.SHEET_ID || process.env.SHEET_ID || localEnv.SHEET_ID,
-    DRIVE_FOLDER_ID: env.DRIVE_FOLDER_ID || process.env.DRIVE_FOLDER_ID || localEnv.DRIVE_FOLDER_ID,
-    DRIVE_FINAL_FOLDER_ID: env.DRIVE_FINAL_FOLDER_ID || process.env.DRIVE_FINAL_FOLDER_ID || localEnv.DRIVE_FINAL_FOLDER_ID,
-    BROWSERLESS_URL: env.BROWSERLESS_URL || process.env.BROWSERLESS_URL || localEnv.BROWSERLESS_URL,
-    MAKE_FALLBACK_WEBHOOK: env.MAKE_FALLBACK_WEBHOOK || process.env.MAKE_FALLBACK_WEBHOOK || localEnv.MAKE_FALLBACK_WEBHOOK,
+    TELEGRAM_BOT_TOKEN: getEnv('TELEGRAM_BOT_TOKEN', env),
+    TELEGRAM_CHAT_ID: getEnv('TELEGRAM_CHAT_ID', env),
+    SHEET_ID: getEnv('SHEET_ID', env),
+    DRIVE_FOLDER_ID: getEnv('DRIVE_FOLDER_ID', env),
+    DRIVE_FINAL_FOLDER_ID: getEnv('DRIVE_FINAL_FOLDER_ID', env),
+    BROWSERLESS_URL: getEnv('BROWSERLESS_URL', env),
+    MAKE_FALLBACK_WEBHOOK: getEnv('MAKE_FALLBACK_WEBHOOK', env),
   };
   validateEnv(mergedEnv);
   const maggie = new MaggieTikTokAutomation(mergedEnv);
   return maggie.run(payload);
+}
+
+export async function deployTikTokBot(payload: Record<string, any>, env: TikTokAutomationEnv = {} as TikTokAutomationEnv) {
+  return runMaggieTikTokLoop(payload, env);
+}
+
+export async function completeMaggieSync(payload: Record<string, any>, env: TikTokAutomationEnv = {} as TikTokAutomationEnv) {
+  return deployTikTokBot(payload, env);
 }
