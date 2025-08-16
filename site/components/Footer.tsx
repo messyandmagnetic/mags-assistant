@@ -16,17 +16,13 @@ export default function Footer() {
         <Link href="/contact" className="hover:underline">
           Contact
         </Link>
-        <a
-          href="https://messymagnetic-privacy-policy.super.site"
-          className="hover:underline"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <Link href="/policy" className="hover:underline">
           Privacy &amp; Terms
-        </a>
+        </Link>
       </nav>
+      <p>EIN 39-3539757 &bull; Retreat: Coyote, NM</p>
       <p>
-        Email:{' '}
+        Email{' '}
         <a href="mailto:hello@messyandmagnetic.com" className="underline">
           hello@messyandmagnetic.com
         </a>

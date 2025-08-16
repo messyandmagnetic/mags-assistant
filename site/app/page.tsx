@@ -11,7 +11,7 @@ export default function HomePage() {
       <section className="py-12">
         <h2 className="mb-4 text-center font-heading text-3xl">Create My Soul Flow System</h2>
         <TallyEmbed
-          src={process.env.NEXT_PUBLIC_TALLY_SOUL_FLOW || 'https://tally.so/embed/placeholder'}
+          src="https://tally.so/r/w268rj"
           title="Create My Soul Flow System"
           height={650}
         />

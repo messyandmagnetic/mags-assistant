@@ -5,7 +5,7 @@ export default function QuizPage() {
     <section className="py-12">
       <h1 className="mb-4 text-center font-heading text-3xl">Soul Flow Quiz</h1>
       <TallyEmbed
-        src={process.env.NEXT_PUBLIC_TALLY_SOUL_FLOW || 'https://tally.so/embed/placeholder'}
+        src="https://tally.so/r/w268rj"
         title="Create My Soul Flow System"
         height={650}
       />
