@@ -312,3 +312,14 @@ back up, normalize and forward Google Form responses.
    - Headers normalized to `lower_snake_case` with a `timestamp` and `form_source` column.
 5. The script installs an *On form submit* trigger that posts new rows to `WORKER_URL` and
    logs any errors to a sheet named `Error_Log`.
+
+## TikTok automation helpers
+
+Early building blocks for Maggie's TikTok workflow live in `src/automation`:
+
+- `video-queue.ts` – stores pending clips in a small SQLite queue.
+- `booster-manager.ts` – rotates through booster accounts defined in `data/accounts.json`.
+- `maggie-tiktok.ts` – orchestrator that wires queueing, scheduling and Telegram summaries.
+
+These modules are intentionally light-weight and serve as placeholders for full
+integrations with Google Drive, CapCut, TikTok and Telegram APIs.

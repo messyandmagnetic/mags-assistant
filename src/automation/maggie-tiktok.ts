@@ -1,3 +1,6 @@
+import { VideoQueue, QueuedVideo } from './video-queue';
+import { BoosterAccountManager } from './booster-manager';
+
 export interface TikTokAutomationEnv {
   DRIVE_FOLDER_ID?: string; // Google Drive "TikTok Drop Folder"
   DRIVE_FINAL_FOLDER_ID?: string; // Google Drive "Final" folder
@@ -13,6 +16,9 @@ export interface TikTokAutomationEnv {
  * real integrations (Drive, CapCut, TikTok, Telegram) can be filled in later.
  */
 export class MaggieTikTokAutomation {
+  private queue = new VideoQueue();
+  private boosters = new BoosterAccountManager();
+
   constructor(private env: TikTokAutomationEnv) {}
 
   /**
@@ -24,6 +30,13 @@ export class MaggieTikTokAutomation {
     // TODO: use Drive API to watch the "TikTok Drop Folder"
     // TODO: perform emotion/trend detection on new videos
     // TODO: append metadata rows to Google Sheet
+    // Example: enqueue a discovered video
+    const sample: QueuedVideo = {
+      fileId: 'demo-file-id',
+      caption: 'placeholder caption',
+      emotion: 'happy'
+    };
+    this.queue.enqueue(sample);
   }
 
   /**
@@ -44,6 +57,18 @@ export class MaggieTikTokAutomation {
     // TODO: launch Browserless session to schedule uploads on TikTok web
     // TODO: choose optimal timeslots (9-12/day, up to 30 if trending)
     // TODO: log scheduling metadata to Google Sheet
+
+    const next = this.queue.nextPending();
+    if (!next) return;
+
+    // Placeholder scheduling logic
+    console.log(`Scheduling video ${next.fileId} with caption ${next.caption}`);
+    try {
+      // TODO: actual upload via Browserless/Puppeteer
+      this.queue.markPosted(next.id!);
+    } catch (err) {
+      this.queue.markFailed(next.id!);
+    }
   }
 
   /**
@@ -72,7 +97,11 @@ export class MaggieTikTokAutomation {
    */
   async sendTelegramSummaries(): Promise<void> {
     // TODO: compile message with posted clips, queue status, flops, trends
+    const pending = this.queue.pendingCount();
+    const nextBooster = this.boosters.nextBooster();
+    const msg = `Queue: ${pending} pending videos. Next booster: ${nextBooster?.username ?? 'n/a'}`;
     // TODO: send message using Telegram Bot API
+    console.log(msg);
   }
 
   /**
