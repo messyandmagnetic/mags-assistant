@@ -7,7 +7,7 @@ import {
 } from './maggie-utils';
 
 import {
-  startRawWatcher, WatcherEnv, schedulePosts,
+  startRawWatcher, startRawTracker, WatcherEnv, schedulePosts,
   SchedulerEnv, startFlopCron, FlopEnv,
   monitorBrowserless, FallbackEnv
 } from './maggie-tasks';
@@ -96,6 +96,7 @@ export class MaggieTikTokAutomation {
   async watchFolder(): Promise<void> {
     await fetchRawFiles();
     startRawWatcher(this.env);
+    startRawTracker(this.env);
   }
 
   /**
