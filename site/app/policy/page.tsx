@@ -4,19 +4,17 @@ export const metadata: Metadata = {
   title: 'Privacy Policy & Terms of Use | Messy & Magnetic',
   description:
     'Read the privacy policy and terms of use for Messy & Magnetic covering data collection, usage, and disclaimers.',
+  alternates: { canonical: '/policy' },
 };
 
 export default function PolicyPage() {
   return (
-    <section className="py-12">
-      <h1 className="mb-6 text-center font-heading text-3xl">
-        Messy &amp; Magnetic™ – Privacy Policy + Terms of Use
-      </h1>
-      <div className="mx-auto max-w-3xl space-y-4 text-brand-ink/80">
-        <h2 className="font-heading text-2xl text-brand-ink">Privacy Policy</h2>
+    <section className="px-4 py-12">
+      <div className="prose mx-auto max-w-3xl text-brand-ink/80 prose-pastel">
+        <h1>Privacy Policy</h1>
         <p>
-          Messy &amp; Magnetic™ respects your privacy. This policy outlines what data we
-          collect, how we use it, and how you can opt out.
+          Messy &amp; Magnetic™ respects your privacy. This policy outlines what
+          data we collect, how we use it, and how you can opt out.
         </p>
         <p>
           We collect basic info via forms (name, email, birthday, etc.) for the
@@ -34,15 +32,15 @@ export default function PolicyPage() {
           </a>{' '}
           and we will remove your info from our system within 7 business days.
         </p>
-        <h2 className="mt-8 font-heading text-2xl text-brand-ink">Terms of Use</h2>
+        <h2>Terms of Use</h2>
         <p>
-          By using any products, readings, or tools from Messy &amp; Magnetic™,
-          you agree that these are intended for personal insight, self-awareness,
-          and spiritual support only. We are not a substitute for licensed
-          therapy, medical advice, or financial counsel. All content is original
-          or based on public esoteric systems (e.g. Astrology, Human Design)
-          interpreted through our own language. You agree not to redistribute
-          these materials commercially.
+          By using any products, readings, or tools from Messy &amp;
+          Magnetic™, you agree that these are intended for personal insight,
+          self-awareness, and spiritual support only. We are not a substitute for
+          licensed therapy, medical advice, or financial counsel. All content is
+          original or based on public esoteric systems (e.g. Astrology, Human
+          Design) interpreted through our own language. You agree not to
+          redistribute these materials commercially.
         </p>
         <p>
           We reserve the right to modify these terms and will notify users of
