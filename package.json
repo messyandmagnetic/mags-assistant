@@ -6,7 +6,8 @@
     "prebuild": "node scripts/stamp-health.mjs",
     "build": "echo 'static site build' ",
     "watcher": "ts-node src/automation/watch-raw.ts",
-    "raw-tracker": "ts-node src/automation/watch-raw-tracker.ts"
+    "raw-tracker": "ts-node src/automation/watch-raw-tracker.ts",
+    "deploy:tiktokbot": "ts-node src/automation/codex-tasks.ts"
   },
   "engines": {
     "node": ">=20 <23"
@@ -21,5 +22,8 @@
     "dotenv": "^16.4.0",
     "puppeteer": "^22.0.0"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "ts-node": "^10.9.1",
+    "typescript": "^5.0.0"
+  }
 }
