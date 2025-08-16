@@ -21,7 +21,17 @@ export async function monitorBrowserless(env: FallbackEnv) {
       await notify(env, 'Renderer switched — all posts still scheduled.');
     }
   } catch (err) {
-    console.error('Browserless metrics check failed', err);
+    console.error('🛑 Browserless crashed', err);
+    await notify(env, '‼️ Browserless failure – fallback may be needed.');
+
+    if (process.env.MAKE_FALLBACK_WEBHOOK) {
+      axios
+        .post(process.env.MAKE_FALLBACK_WEBHOOK, {
+          type: 'fallback',
+          error: (err as Error).message,
+        })
+        .catch(console.error);
+    }
   }
 }
 

@@ -1,4 +1,5 @@
 import puppeteer from 'puppeteer-core';
+import axios from 'axios';
 import { startRawWatcher, WatcherEnv } from './watch-raw';
 import { startFlopCron, FlopEnv } from './flop-cron';
 import { monitorBrowserless, FallbackEnv } from './fallback-monitor';
@@ -12,8 +13,16 @@ interface QueueItem {
   useCapCut?: boolean;
 }
 
+async function sendTelegram(text: string) {
+  if (!process.env.TELEGRAM_BOT_TOKEN || !process.env.TELEGRAM_CHAT_ID) return;
+  const url = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/sendMessage`;
+  await axios.post(url, { chat_id: process.env.TELEGRAM_CHAT_ID, text }).catch(console.error);
+}
+
 class PostQueue {
   private items: QueueItem[] = [];
+  private flopTracker: Record<string, number> = {};
+  private retreatMode = false;
 
   next(): QueueItem | undefined {
     return this.items.shift();
@@ -26,7 +35,46 @@ class PostQueue {
 
   markFailed(id: string) {
     console.log(`❌ Failed ${id}`);
+    this.flopTracker[id] = (this.flopTracker[id] || 0) + 1;
+    if (this.flopTracker[id] >= 3 && !this.retreatMode) {
+      this.retreatTrigger(id);
+    }
     // TODO: update Google Sheet tracker on failure
+  }
+
+  retreatTrigger(id: string) {
+    this.retreatMode = true;
+    console.warn(`🚨 Retreat mode triggered due to flops on ${id}`);
+    this.items = []; // Pause new uploads
+
+    const msg = `📉 Maggie paused after 3 flops on ${id}. Manual check recommended.`;
+
+    if (process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_CHAT_ID) {
+      sendTelegram(msg);
+    }
+
+    if (process.env.MAKE_RETREAT_WEBHOOK) {
+      axios
+        .post(process.env.MAKE_RETREAT_WEBHOOK, {
+          type: 'retreat',
+          video: id,
+          reason: 'flop-detected',
+        })
+        .catch(console.error);
+    }
+  }
+
+  resumeQueue() {
+    this.retreatMode = false;
+    console.log(`✅ Maggie resumed from retreat mode`);
+    sendTelegram?.('🔁 Maggie resumed after retreat mode.');
+  }
+
+  checkVideoStatsAndResume(id: string, views: number) {
+    if (this.retreatMode && views > 500) {
+      console.log(`🎯 Video ${id} got ${views} views — resuming Maggie`);
+      this.resumeQueue();
+    }
   }
 }
 
