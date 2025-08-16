@@ -8,6 +8,8 @@ export const localEnv: Record<string, string | undefined> = {
   DRIVE_FINAL_FOLDER_ID: undefined,
   BROWSERLESS_URL: undefined,
   MAKE_FALLBACK_WEBHOOK: undefined,
+  RETRY_DELAY_MS: undefined,
+  CAPCUT: undefined,
 };
 
 const cloudKV = {
