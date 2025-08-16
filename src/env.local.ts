@@ -10,6 +10,8 @@ export const localEnv: Record<string, string | undefined> = {
   MAKE_FALLBACK_WEBHOOK: undefined,
   RETRY_DELAY_MS: undefined,
   CAPCUT: undefined,
+  CLOUDFLARE_WORKER_URL: 'https://tight-snow-2840.messyandmagnetic.workers.dev',
+  CLOUDFLARE_WORKER_NAME: 'tight-snow-2840',
 };
 
 const cloudKV = {
