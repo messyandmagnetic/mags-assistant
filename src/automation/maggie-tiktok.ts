@@ -1,4 +1,7 @@
 import puppeteer from 'puppeteer-core';
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
 import {
   fetchRawFiles, renameFiles, extractEmotionKeywords,
   appendRow, fetchRows, colorCodeRow, renderVideo,
@@ -11,6 +14,25 @@ import {
   SchedulerEnv, startFlopCron, FlopEnv,
   monitorBrowserless, FallbackEnv
 } from './maggie-tasks';
+import { localEnv } from '../env.local';
+
+const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+function validateEnv(env: TikTokAutomationEnv) {
+  const required = [
+    'TELEGRAM_BOT_TOKEN',
+    'TELEGRAM_CHAT_ID',
+    'SHEET_ID',
+    'DRIVE_FOLDER_ID',
+    'DRIVE_FINAL_FOLDER_ID',
+    'BROWSERLESS_URL',
+  ] as const;
+  for (const key of required) {
+    if (!(env as any)[key]) {
+      throw new Error(`Missing env var: ${key}`);
+    }
+  }
+}
 
 export interface TikTokAutomationEnv extends
   WatcherEnv,
@@ -23,6 +45,7 @@ export interface TikTokAutomationEnv extends
   TELEGRAM_BOT_TOKEN?: string;
   TELEGRAM_CHAT_ID?: string;
   BROWSERLESS_URL?: string;
+  MAKE_FALLBACK_WEBHOOK?: string;
 }
 
 interface QueueItem {
@@ -30,32 +53,67 @@ interface QueueItem {
   filename: string;
   emotion?: string;
   useCapCut?: boolean;
+  caption?: string;
+  retries?: number;
 }
 
 class PostQueue {
+  private file = path.resolve('queue.json');
   private items: QueueItem[] = [];
   private failures: { id: string; ts: number }[] = [];
 
-  constructor(private onRetreat: () => Promise<void>) {}
+  constructor(private env: TikTokAutomationEnv, private onRetreat: () => Promise<void>) {
+    this.load();
+  }
+
+  private load() {
+    if (!fs.existsSync(this.file)) return;
+    try {
+      const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
+      this.items = data.items || [];
+      this.failures = data.failures || [];
+    } catch (err) {
+      console.error('Failed to load queue', err);
+    }
+  }
+
+  private save() {
+    try {
+      fs.writeFileSync(this.file, JSON.stringify({ items: this.items, failures: this.failures }, null, 2));
+    } catch (err) {
+      console.error('Failed to save queue', err);
+    }
+  }
 
   enqueue(item: QueueItem) {
     this.items.push(item);
+    this.save();
   }
 
   next(): QueueItem | undefined {
-    return this.items.shift();
+    const item = this.items.shift();
+    this.save();
+    return item;
   }
 
-  markPosted(id: string) {
-    console.log(`✅ Posted ${id}`);
-    // TODO: update Google Sheet tracker on success
+  async markPosted(item: QueueItem) {
+    console.log(`✅ Posted ${item.id}`);
+    await appendRow({
+      spreadsheetId: this.env.SHEET_ID,
+      values: [item.filename, new Date().toISOString(), 'posted', item.caption || '', item.emotion || '', !!item.useCapCut, false],
+    });
+    this.save();
   }
 
-  markFailed(id: string) {
-    console.log(`❌ Failed ${id}`);
-    this.failures.push({ id, ts: Date.now() });
+  async markFailed(item: QueueItem, flopDetected = false) {
+    console.log(`❌ Failed ${item.id}`);
+    this.failures.push({ id: item.id, ts: Date.now() });
+    await appendRow({
+      spreadsheetId: this.env.SHEET_ID,
+      values: [item.filename, new Date().toISOString(), 'failed', item.caption || '', item.emotion || '', !!item.useCapCut, flopDetected],
+    });
+    this.save();
     this.retreatTrigger();
-    // TODO: update Google Sheet tracker on failure
   }
 
   private async retreatTrigger() {
@@ -65,6 +123,7 @@ class PostQueue {
     if (recent.length >= 3) {
       await this.onRetreat();
       this.failures = [];
+      this.save();
     }
   }
 }
@@ -85,9 +144,11 @@ async function generateCaptionFromEmotion(emotion) {
  */
 export class MaggieTikTokAutomation {
   private paused = false;
-  private queue = new PostQueue(() => this.retreatMode());
+  private queue: PostQueue;
 
-  constructor(private env: TikTokAutomationEnv) {}
+  constructor(private env: TikTokAutomationEnv) {
+    this.queue = new PostQueue(this.env, () => this.retreatMode());
+  }
 
   /**
    * 🎥 FOLDER WATCHER
@@ -117,41 +178,97 @@ export class MaggieTikTokAutomation {
 
     console.log(`📅 Scheduling video: ${next.filename}`);
 
-    try {
-      const browser = await puppeteer.connect({ browserWSEndpoint: this.env.BROWSERLESS_URL });
-      const page = await browser.newPage();
+    next.retries = next.retries || 0;
+    if (!next.caption && next.emotion) {
+      next.caption = await generateCaptionFromEmotion(next.emotion);
+    }
 
-      await page.goto("https://www.tiktok.com/upload");
-      await page.waitForSelector('input[type="file"]');
+    const attempt = next.retries;
 
-      // Upload video from local or mounted folder
-      const fileInput = await page.$('input[type="file"]');
-      await fileInput.uploadFile(`/mnt/data/raw/${next.filename}`);
-
-      // Auto-caption
-      const caption = await generateCaptionFromEmotion(next.emotion || "validating");
-
-      if (next.useCapCut) {
-        try {
-          await page.evaluate(() => (window as any).applyCapCut());
-        } catch (err) {
-          await page.type('textarea[placeholder="Caption"]', `${caption} 😊`);
-        }
-      } else {
-        await page.type('textarea[placeholder="Caption"]', caption);
+    const upload = async (): Promise<boolean> => {
+      let browser;
+      let page;
+      // Puppeteer launch
+      try {
+        browser = await puppeteer.connect({ browserWSEndpoint: this.env.BROWSERLESS_URL });
+        page = await browser.newPage();
+      } catch (err) {
+        console.error('Launch failed', err);
+        await this.queue.markFailed(next, attempt >= 2);
+        return false;
       }
 
-      // Post now or click Schedule if enabled
-      await page.click('button:contains("Post")');
+      // File upload
+      try {
+        await page.goto('https://www.tiktok.com/upload');
+        await page.waitForSelector('input[type="file"]');
+        const fileInput = await page.$('input[type="file"]');
+        await fileInput.uploadFile(`/mnt/data/raw/${next.filename}`);
+      } catch (err) {
+        console.error('Upload failed', err);
+        await this.queue.markFailed(next, attempt >= 2);
+        await browser.close();
+        return false;
+      }
 
-      this.queue.markPosted(next.id);
+      // Caption write
+      try {
+        await page.type('textarea[placeholder="Caption"]', next.caption || '');
+      } catch (err) {
+        console.error('Caption failed', err);
+        await this.queue.markFailed(next, attempt >= 2);
+        await browser.close();
+        return false;
+      }
+
+      // Toggle CapCut if needed
+      if (next.useCapCut) {
+        try {
+          await page.click('button[data-e2e="capcut"]');
+        } catch (err) {
+          console.error('CapCut toggle failed', err);
+          await this.queue.markFailed(next, attempt >= 2);
+          await browser.close();
+          return false;
+        }
+      }
+
+      // Press Post
+      try {
+        await page.click('button:contains("Post")');
+      } catch (err) {
+        console.error('Post click failed', err);
+        await this.queue.markFailed(next, attempt >= 2);
+        await browser.close();
+        return false;
+      }
+
+      await this.queue.markPosted(next);
       await page.close();
       await browser.close();
+      return true;
+    };
 
-    } catch (err) {
-      console.error("❌ Upload failed:", err);
-      this.queue.markFailed(next.id);
+    const ok = await upload();
+    if (!ok) {
+      if (attempt < 2) {
+        next.retries = attempt + 1;
+        console.log(`Retrying ${next.filename} in 10 minutes`);
+        setTimeout(() => this.queue.enqueue(next), 10 * 60 * 1000);
+      } else {
+        await sendTelegram(this.env, `Upload failed for ${next.filename}`);
+        if (this.env.MAKE_FALLBACK_WEBHOOK) {
+          try {
+            await axios.post(this.env.MAKE_FALLBACK_WEBHOOK, { type: 'fail', video: next.filename });
+          } catch (err) {
+            console.error('Fallback webhook failed', err);
+          }
+        }
+      }
     }
+
+    await delay(60 * 1000);
+    await this.scheduleTikToks();
   }
 
   /**
@@ -188,7 +305,17 @@ export class MaggieTikTokAutomation {
   }
 }
 
-export async function runMaggieTikTokLoop(payload: Record<string, any>, env: TikTokAutomationEnv) {
-  const maggie = new MaggieTikTokAutomation(env);
+export async function runMaggieTikTokLoop(payload: Record<string, any>, env: TikTokAutomationEnv = {} as TikTokAutomationEnv) {
+  const mergedEnv: TikTokAutomationEnv = {
+    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || localEnv.TELEGRAM_BOT_TOKEN,
+    TELEGRAM_CHAT_ID: env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_CHAT_ID || localEnv.TELEGRAM_CHAT_ID,
+    SHEET_ID: env.SHEET_ID || process.env.SHEET_ID || localEnv.SHEET_ID,
+    DRIVE_FOLDER_ID: env.DRIVE_FOLDER_ID || process.env.DRIVE_FOLDER_ID || localEnv.DRIVE_FOLDER_ID,
+    DRIVE_FINAL_FOLDER_ID: env.DRIVE_FINAL_FOLDER_ID || process.env.DRIVE_FINAL_FOLDER_ID || localEnv.DRIVE_FINAL_FOLDER_ID,
+    BROWSERLESS_URL: env.BROWSERLESS_URL || process.env.BROWSERLESS_URL || localEnv.BROWSERLESS_URL,
+    MAKE_FALLBACK_WEBHOOK: env.MAKE_FALLBACK_WEBHOOK || process.env.MAKE_FALLBACK_WEBHOOK || localEnv.MAKE_FALLBACK_WEBHOOK,
+  };
+  validateEnv(mergedEnv);
+  const maggie = new MaggieTikTokAutomation(mergedEnv);
   return maggie.run(payload);
 }
