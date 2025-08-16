@@ -1,62 +1,52 @@
-import { startRawWatcher, WatcherEnv } from './watch-raw';
-import { schedulePosts, SchedulerEnv } from './schedule-tiktok';
-import { startFlopCron, FlopEnv } from './flop-cron';
-import { monitorBrowserless, FallbackEnv } from './fallback-monitor';
+import {
+  fetchRawFiles,
+  renameFiles,
+  extractEmotionKeywords,
+  appendRow,
+  fetchRows,
+  colorCodeRow,
+  renderVideo,
+  uploadToTikTok,
+  sendTelegram,
+  findFlops,
+  fetchTrending,
+  cleanup,
+} from './maggie-utils';
 
-export interface TikTokAutomationEnv extends WatcherEnv, SchedulerEnv, FlopEnv, FallbackEnv {}
+import {
+  startRawWatcher,
+  WatcherEnv,
+  schedulePosts,
+  SchedulerEnv,
+  startFlopCron,
+  FlopEnv,
+  monitorBrowserless,
+  FallbackEnv,
+} from './maggie-tasks';
 
-/**
- * MaggieTikTokAutomation orchestrates the end-to-end TikTok pipeline.
- * Methods delegate to specialized modules in this folder.
- */
-export class MaggieTikTokAutomation {
-  constructor(private env: TikTokAutomationEnv) {}
-
-  /**
-   * 🎥 FOLDER WATCHER
-   * Monitor Google Drive folder for new videos and analyze content.
-   */
-  async watchFolder(): Promise<void> {
-    startRawWatcher(this.env);
-  }
-
-  /**
-   * 📲 TIKTOK AUTO-SCHEDULER
-   * Post videos from the final folder to TikTok.
-   */
-  async scheduleTikToks(): Promise<void> {
-    await schedulePosts(this.env);
-  }
-
-  /**
-   * 📉 FLOP DETECTOR + RECOVERY
-   * Recut and repost low performing videos.
-   */
-  async detectAndRecoverFlops(): Promise<void> {
-    startFlopCron(this.env);
-  }
-
-  /**
-   * 🤖 AUTO-SWITCHING
-   * Switch to Playwright/Puppeteer if Browserless usage exceeds 75%.
-   */
-  async autoSwitchRenderer(): Promise<void> {
-    await monitorBrowserless(this.env);
-  }
-
-  /**
-   * Placeholder for other modules like trend insights or Telegram summaries.
-   */
-  async run(payload: Record<string, any>): Promise<{ ok: boolean }> {
-    this.watchFolder();
-    await this.scheduleTikToks();
-    await this.detectAndRecoverFlops();
-    await this.autoSwitchRenderer();
-    return { ok: true };
-  }
+export interface TikTokAutomationEnv {
+  DRIVE_FOLDER_ID?: string; // Raw video drop
+  DRIVE_FINAL_FOLDER_ID?: string; // Edited outputs
+  SHEET_ID?: string; // Tracker sheet
+  TELEGRAM_BOT_TOKEN?: string;
+  TELEGRAM_CHAT_ID?: string;
+  BROWSERLESS_URL?: string;
 }
 
-export async function runMaggieTikTokLoop(payload: Record<string, any>, env: TikTokAutomationEnv) {
-  const maggie = new MaggieTikTokAutomation(env);
-  return maggie.run(payload);
-}
+// Apply triggers
+startRawWatcher();
+schedulePosts();
+startFlopCron();
+monitorBrowserless();
+
+// Inject runtime env vars (for safety)
+process.env.TELEGRAM_BOT_TOKEN = '8482437764:AAFsXsSWA4NE3ZP1YEYpoJ_K0iNKPm07PdU';
+process.env.TELEGRAM_CHAT_ID = '8440497509';
+process.env.DRIVE_FOLDER_ID = '1m-OjLhXttfS655ldGJxr9xFOqsWY25sD';
+process.env.DRIVE_FINAL_FOLDER_ID = 'FINAL_FOLDER_ID_HERE'; // Replace if needed
+process.env.SHEET_ID = '1nP7As9RBiHNwWdADt60W_cx0bj0JP3FJ';
+
+console.log(
+  '🎬 Maggie automation live with emotion tagging, retries, Telegram reports, and Puppeteer upload.'
+);
+
