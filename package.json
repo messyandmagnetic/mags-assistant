@@ -8,7 +8,9 @@
     "watcher": "ts-node src/automation/watch-raw.ts",
     "raw-tracker": "ts-node src/automation/watch-raw-tracker.ts"
   },
-  "engines": { "node": ">=20 <23" },
+  "engines": {
+    "node": ">=20 <23"
+  },
   "dependencies": {
     "googleapis": "^131.0.0",
     "node-fetch": "^3.3.2",
@@ -16,7 +18,8 @@
     "chokidar": "^3.5.3",
     "node-cron": "^3.0.0",
     "axios": "^1.6.8",
-    "dotenv": "^16.4.0"
+    "dotenv": "^16.4.0",
+    "puppeteer": "^22.0.0"
   },
   "devDependencies": {}
 }
