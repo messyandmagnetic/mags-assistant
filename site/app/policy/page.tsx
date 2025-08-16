@@ -1,9 +1,11 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy & Terms of Use | Messy & Magnetic',
+  title: 'Messy & Magnetic™ – Privacy Policy & Terms of Use',
   description:
-    'Read the privacy policy and terms of use for Messy & Magnetic covering data collection, usage, and disclaimers.',
+    'Messy & Magnetic™ Privacy Policy and Terms of Use for all digital products, soul readings, rhythm systems, and retreat programs.',
+  viewport: 'width=device-width, initial-scale=1',
+  robots: { index: true, follow: true },
   alternates: { canonical: '/policy' },
 };
 
