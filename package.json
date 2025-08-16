@@ -5,7 +5,8 @@
   "scripts": {
     "prebuild": "node scripts/stamp-health.mjs",
     "build": "echo 'static site build' ",
-    "watcher": "ts-node src/automation/watch-raw.ts"
+    "watcher": "ts-node src/automation/watch-raw.ts",
+    "raw-tracker": "ts-node src/automation/watch-raw-tracker.ts"
   },
   "engines": { "node": ">=20 <23" },
   "dependencies": {
