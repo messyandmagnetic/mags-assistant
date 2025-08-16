@@ -6,7 +6,7 @@ import {
   fetchRawFiles, renameFiles, extractEmotionKeywords,
   appendRow, fetchRows, colorCodeRow, renderVideo,
   uploadToTikTok, sendTelegram, findFlops,
-  fetchTrending, cleanup
+  cleanup
 } from './maggie-utils';
 
 import {
@@ -14,9 +14,71 @@ import {
   SchedulerEnv, startFlopCron, FlopEnv,
   monitorBrowserless, FallbackEnv
 } from './maggie-tasks';
-import { localEnv, getEnv } from '../env.local';
+import { getEnv } from '../lib/getEnv';
+import { appendRows, getDrive } from '../../lib/google.js';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
+const RETRY_DELAY_MS = Number(process.env.RETRY_DELAY_MS) || 5 * 60 * 1000;
+
+const EMOJI_CAPTIONS: Record<string, string> = {
+  joy: '💛✨When your soul lights up for no reason',
+  grief: '🖤 Not everything has to be okay today, and that’s okay.',
+  silly: '😂 Sometimes healing looks like this.',
+};
+
+async function syncEmojiGuide(env: TikTokAutomationEnv) {
+  if (!env.SHEET_ID) return;
+  const rows = Object.entries(EMOJI_CAPTIONS).map(([e, c]) => [e, c]);
+  try {
+    await appendRows(env.SHEET_ID, 'Reference!A:B', rows);
+  } catch (err) {
+    console.error('Failed to sync emoji guide', err);
+  }
+}
+
+const queuePath = path.join('/tmp', 'queue.json');
+
+interface QueueData {
+  items: QueueItem[];
+  failures: { id: string; ts: number }[];
+}
+
+export function loadQueue(): QueueData {
+  if (!fs.existsSync(queuePath)) return { items: [], failures: [] };
+  try {
+    return JSON.parse(fs.readFileSync(queuePath, 'utf8'));
+  } catch {
+    return { items: [], failures: [] };
+  }
+}
+
+export function saveQueue(data: QueueData) {
+  try {
+    fs.writeFileSync(queuePath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error('Failed to save queue', err);
+  }
+}
+
+async function generatePreview(env: TikTokAutomationEnv, items: QueueItem[]) {
+  const upcoming = items.filter(i => i.status === 'queued').slice(0, 5);
+  const rows = upcoming
+    .map(i => `<tr><td>${i.filename}</td><td>${i.emotion || ''}</td><td>${i.scheduled || ''}</td><td>${i.caption || ''}</td></tr>`)
+    .join('');
+  const html = `<!DOCTYPE html><html><body><table><tr><th>File</th><th>Emoji</th><th>Scheduled</th><th>Caption</th></tr>${rows}</table></body></html>`;
+  const previewPath = path.join('/tmp', 'schedule-preview.html');
+  fs.writeFileSync(previewPath, html);
+  if (!env.DRIVE_FINAL_FOLDER_ID) return;
+  try {
+    const drive = await getDrive();
+    await drive.files.create({
+      requestBody: { name: 'schedule-preview.html', parents: [env.DRIVE_FINAL_FOLDER_ID] },
+      media: { mimeType: 'text/html', body: fs.createReadStream(previewPath) },
+    });
+  } catch (err) {
+    console.error('Failed to upload preview', err);
+  }
+}
 
 function validateEnv(env: TikTokAutomationEnv) {
   const required = [
@@ -54,37 +116,26 @@ interface QueueItem {
   emotion?: string;
   useCapCut?: boolean;
   caption?: string;
+  scheduled?: string;
   retries?: number;
   status?: 'queued' | 'processing' | 'failed' | 'posted' | 'flop_final';
   lastError?: string;
 }
 
 class PostQueue {
-  private file = path.resolve('queue.json');
   private items: QueueItem[] = [];
   private failures: { id: string; ts: number }[] = [];
+  private consecutiveFails = 0;
 
   constructor(private env: TikTokAutomationEnv, private onRetreat: () => Promise<void>) {
-    this.load();
+    const data = loadQueue();
+    this.items = data.items || [];
+    this.failures = data.failures || [];
   }
 
-  private load() {
-    if (!fs.existsSync(this.file)) return;
-    try {
-      const data = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      this.items = data.items || [];
-      this.failures = data.failures || [];
-    } catch (err) {
-      console.error('Failed to load queue', err);
-    }
-  }
-
-  save() {
-    try {
-      fs.writeFileSync(this.file, JSON.stringify({ items: this.items, failures: this.failures }, null, 2));
-    } catch (err) {
-      console.error('Failed to save queue', err);
-    }
+  private save() {
+    saveQueue({ items: this.items, failures: this.failures });
+    generatePreview(this.env, this.items).catch(err => console.error(err));
   }
 
   enqueue(item: QueueItem) {
@@ -110,12 +161,16 @@ class PostQueue {
   async markPosted(item: QueueItem) {
     item.status = 'posted';
     this.update(item);
+    this.consecutiveFails = 0;
     console.log(`✅ Posted ${item.id}`);
-    await appendRow({
-      spreadsheetId: this.env.SHEET_ID,
-      values: [item.filename, new Date().toISOString(), 'posted', item.caption || '', item.emotion || '', !!item.useCapCut, false],
-    });
+    if (this.env.SHEET_ID) {
+      await appendRow({
+        spreadsheetId: this.env.SHEET_ID,
+        values: [item.filename, new Date().toISOString(), '✅ posted', item.caption || '', item.emotion || '', !!item.useCapCut, false],
+      });
+    }
     this.save();
+    await sendTelegram(this.env, `🎥 New TikTok uploaded: ${item.filename}`);
   }
 
   async markFailed(item: QueueItem, flopDetected = false, reason = 'unknown') {
@@ -123,14 +178,24 @@ class PostQueue {
     item.lastError = reason;
     item.retries = (item.retries || 0) + 1;
     this.update(item);
+    this.consecutiveFails++;
     console.log(`❌ Failed ${item.id}: ${reason}`);
     this.failures.push({ id: item.id, ts: Date.now() });
-    await appendRow({
-      spreadsheetId: this.env.SHEET_ID,
-      values: [item.filename, new Date().toISOString(), 'failed', item.caption || '', item.emotion || '', !!item.useCapCut, flopDetected],
-    });
+    if (this.env.SHEET_ID) {
+      await appendRow({
+        spreadsheetId: this.env.SHEET_ID,
+        values: [item.filename, new Date().toISOString(), '❌ failed', item.caption || '', item.emotion || '', !!item.useCapCut, flopDetected],
+      });
+    }
     this.save();
-    if (item.retries >= 3) {
+    if (item.retries < 3) {
+      setTimeout(() => {
+        item.status = 'queued';
+        this.update(item);
+        this.save();
+      }, RETRY_DELAY_MS);
+      await sendTelegram(this.env, `🔁 Retry triggered for ${item.filename}`);
+    } else {
       await sendTelegram(this.env, `Upload failed for ${item.filename}`);
       if (this.env.MAKE_FALLBACK_WEBHOOK) {
         try {
@@ -138,48 +203,17 @@ class PostQueue {
         } catch (err) {
           console.error('Fallback webhook failed', err);
         }
-      } else {
-        await globalThis.codex?.tasks?.retryPostQueue?.();
-        await globalThis.codex?.tasks?.notifyViaTelegram?.(`Upload failed for ${item.filename}`);
       }
     }
-    await this.retreatTrigger();
-  }
-
-  retryFailed() {
-    for (const item of this.items.filter(i => i.status === 'failed' && (i.retries || 0) < 3)) {
-      const delayMs = Math.pow(2, item.retries || 0) * 60 * 1000;
-      setTimeout(() => {
-        item.status = 'queued';
-        this.update(item);
-        this.save();
-      }, delayMs);
-    }
-  }
-
-  private async retreatTrigger() {
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
-    const cutoff = Date.now() - sevenDays;
-    const recent = this.failures.filter(f => f.ts >= cutoff);
-    if (recent.length >= 3) {
+    if (item.retries >= 3 || this.consecutiveFails >= 3) {
       await this.onRetreat();
-      this.failures = [];
-      this.save();
     }
   }
 }
 
-async function generateCaptionFromEmotion(emotion: string): Promise<string> {
-  if (emotion === 'random') {
-    const list = (await fetchTrending()) as string[];
-    emotion = list[Math.floor(Math.random() * list.length)] || 'funny';
-  }
-  const emotionMap: Record<string, string> = {
-    validating: 'Overstimulated? Same \uD83D\uDC80',
-    funny: 'This is your sign to *not* parent gently today \uD83D\uDE05',
-    playful: 'POV: the farm is healing you but the kids are feral',
-  };
-  return emotionMap[emotion] || 'Let the universe hold this one.';
+async function generateCaptionFromEmotion(emotion?: string): Promise<string> {
+  if (!emotion) return 'Let the universe hold this one.';
+  return EMOJI_CAPTIONS[emotion] || 'Let the universe hold this one.';
 }
 
 /**
@@ -192,7 +226,7 @@ export class MaggieTikTokAutomation {
 
   constructor(private env: TikTokAutomationEnv) {
     this.queue = new PostQueue(this.env, () => this.retreatMode());
-    this.queue.retryFailed();
+    syncEmojiGuide(this.env);
   }
 
   /**
@@ -325,7 +359,11 @@ export class MaggieTikTokAutomation {
 
   private async retreatMode() {
     this.paused = true;
-    await sendTelegram(this.env, '📉 Retreat mode triggered');
+    await sendTelegram(this.env, '🌙 Maggie has entered fallback retreat mode.');
+    await sendTelegram(this.env, '💤 Maggie is taking a break to recharge. She’ll be back soon.');
+    setTimeout(() => {
+      this.paused = false;
+    }, 12 * 60 * 60 * 1000);
   }
 
   private async checkFlop(item: QueueItem) {
@@ -334,11 +372,11 @@ export class MaggieTikTokAutomation {
     if (stats.views < 100) {
       if ((item.retries || 0) < 3) {
         item.retries = (item.retries || 0) + 1;
-        item.emotion = 'random';
-        item.caption = await generateCaptionFromEmotion('random');
+        item.caption = await generateCaptionFromEmotion(item.emotion);
         await renderVideo();
         this.queue.enqueue(item);
       } else {
+        await this.queue.markFailed(item, true, 'flop');
         item.status = 'flop_final';
         this.queue.update(item);
         await sendTelegram(this.env, `Final flop: ${item.filename}`);
