@@ -21,7 +21,7 @@ export async function monitorBrowserless(env: FallbackEnv) {
       await notify(env, 'Renderer switched — all posts still scheduled.');
     }
   } catch (err) {
-    console.error('Browserless metrics check failed', err);
+    console.error('🔻Browserless fallback triggered', err);
   }
 }
 
