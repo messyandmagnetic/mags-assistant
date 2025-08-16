@@ -21,17 +21,26 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: 'Messy & Magnetic',
-  description: 'Handcrafted goods with farmhouse charm.',
+  description: 'Validating, warm, intuitive, magical.',
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}>
+    <html lang="en" className={`${fraunces.variable} ${inter.variable}`}> 
+      <head>
+        <link
+          rel="icon"
+          href="/favicon.svg"
+          type="image/svg+xml"
+          title="Messy & Magnetic soul sparkle icon"
+        />
+      </head>
       <body>
         <Header />
-        <main className="mx-auto max-w-5xl px-4">
-          {children}
-        </main>
+        <main className="mx-auto max-w-5xl px-4">{children}</main>
         <Footer />
         <ChatBubble />
       </body>

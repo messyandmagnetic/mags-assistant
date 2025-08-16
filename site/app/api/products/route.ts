@@ -19,6 +19,8 @@ export async function GET() {
           ? (p.default_price.unit_amount || 0) / 100
           : 0,
       image: p.images && p.images.length > 0 ? p.images[0] : null,
+      description: p.description || null,
+      checkoutUrl: p.metadata?.checkout_url || null,
     }));
     return NextResponse.json({ products: data });
   } catch (e) {
