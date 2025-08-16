@@ -110,3 +110,67 @@ function notifyWarning_(face, video, warnings) {
   const body = `Video ${video} flagged: ${warnings.join(', ')}`;
   MailApp.sendEmail(email, subject, body);
 }
+
+function retryFloppedTikToks() {
+  const sheetName = 'UsedContentLog';
+  const sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  const data = sheet.getDataRange().getValues();
+  const headers = data[0];
+
+  const colIndex = {
+    postId: headers.indexOf('Post ID or Filename'),
+    result: headers.indexOf('Result (Success, Flop, Needs Reposting)'),
+    caption: headers.indexOf('Caption'),
+    reused: headers.indexOf('Reused? (Yes/No)'),
+    notes: headers.indexOf('Notes'),
+  };
+
+  for (let i = 1; i < data.length; i++) {
+    const row = data[i];
+    if (row[colIndex.result] === 'Flop' && row[colIndex.reused] !== 'Yes') {
+      const caption = row[colIndex.caption];
+      const postId = row[colIndex.postId];
+
+      const suggestion = callGeminiFixSuggestion_(caption);
+
+      sheet.getRange(i + 1, colIndex.reused + 1).setValue('Yes');
+      sheet.getRange(i + 1, colIndex.notes + 1).setValue('Retry: ' + suggestion);
+
+      sendTelegramUpdate_(`📉 Post ${postId} flopped.\n\n💡 Suggested fix:\n${suggestion}`);
+    }
+  }
+}
+
+function callGeminiFixSuggestion_(originalCaption) {
+  const apiKey = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+  const prompt =
+    `This TikTok post flopped. Here's the original caption: "${originalCaption}". Suggest a better caption and a short improvement plan that would help it perform better. Make it witty, human, and trendy.`;
+
+  try {
+    const response = UrlFetchApp.fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`,
+      {
+        method: 'post',
+        contentType: 'application/json',
+        payload: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        muteHttpExceptions: true,
+      },
+    );
+    const json = JSON.parse(response.getContentText());
+    return json.candidates?.[0]?.content?.parts?.[0]?.text || 'No suggestion returned.';
+  } catch (e) {
+    Logger.log('Gemini API error: ' + e);
+    return 'Error retrieving suggestion.';
+  }
+}
+
+function sendTelegramUpdate_(message) {
+  const token = PropertiesService.getScriptProperties().getProperty('TELEGRAM_TOKEN');
+  const chatId = PropertiesService.getScriptProperties().getProperty('TELEGRAM_CHAT_ID');
+  const url = `https://api.telegram.org/bot${token}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(message)}`;
+  try {
+    UrlFetchApp.fetch(url);
+  } catch (e) {
+    Logger.log('Telegram error: ' + e);
+  }
+}
