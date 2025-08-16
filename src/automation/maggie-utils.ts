@@ -13,13 +13,13 @@ export async function extractEmotionKeywords() {
   console.log('extractEmotionKeywords placeholder');
 }
 
-export async function appendRow({ spreadsheetId, values }: { spreadsheetId?: string; values: any[] }) {
+export async function appendRow({ spreadsheetId, values, range = 'Sheet1!A:G' }: { spreadsheetId?: string; values: any[]; range?: string }) {
   if (!spreadsheetId) {
     console.warn('No spreadsheetId provided for appendRow');
     return;
   }
   try {
-    await appendRows(spreadsheetId, 'Sheet1!A:G', [values]);
+    await appendRows(spreadsheetId, range, [values]);
   } catch (err) {
     console.error('Failed to append row', err);
   }
