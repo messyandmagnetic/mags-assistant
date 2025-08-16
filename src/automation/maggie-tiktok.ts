@@ -115,6 +115,11 @@ class PostQueue {
       spreadsheetId: this.env.SHEET_ID,
       values: [item.filename, new Date().toISOString(), 'posted', item.caption || '', item.emotion || '', !!item.useCapCut, false],
     });
+    try {
+      fs.renameSync(`/mnt/data/raw/${item.filename}`, `/mnt/data/done/${item.filename}`);
+    } catch (err) {
+      console.error('Failed to move file to done folder', err);
+    }
     this.save();
   }
 
@@ -127,11 +132,11 @@ class PostQueue {
     this.failures.push({ id: item.id, ts: Date.now() });
     await appendRow({
       spreadsheetId: this.env.SHEET_ID,
-      values: [item.filename, new Date().toISOString(), 'failed', item.caption || '', item.emotion || '', !!item.useCapCut, flopDetected],
+      values: [item.filename, new Date().toISOString(), 'FAILED ❌', item.caption || '', item.emotion || '', !!item.useCapCut, flopDetected],
     });
     this.save();
     if (item.retries >= 3) {
-      await sendTelegram(this.env, `Upload failed for ${item.filename}`);
+      await sendTelegram(this.env, `Upload failed (${reason}) for ${item.filename}`);
       if (this.env.MAKE_FALLBACK_WEBHOOK) {
         try {
           await axios.post(this.env.MAKE_FALLBACK_WEBHOOK, { type: 'fail', video: item.filename });
@@ -218,6 +223,7 @@ export class MaggieTikTokAutomation {
     const next = this.queue.next();
     if (!next) {
       console.log('No videos queued.');
+      await sendTelegram(this.env, 'Queue is empty');
       return;
     }
 
@@ -351,6 +357,7 @@ export class MaggieTikTokAutomation {
    * Placeholder for other modules like trend insights or Telegram summaries.
    */
   async run(payload: Record<string, any>): Promise<{ ok: boolean }> {
+    await fetchRows();
     this.watchFolder();
     await this.scheduleTikToks();
     await this.detectAndRecoverFlops();
