@@ -16,14 +16,9 @@ export default function Footer() {
         <Link href="/contact" className="hover:underline">
           Contact
         </Link>
-        <a
-          href="https://messymagnetic-privacy-policy.super.site"
-          className="hover:underline"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
+        <Link href="/policy" className="hover:underline">
           Privacy &amp; Terms
-        </a>
+        </Link>
       </nav>
       <p>
         Email:{' '}
