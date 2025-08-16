@@ -14,7 +14,7 @@ import {
   SchedulerEnv, startFlopCron, FlopEnv,
   monitorBrowserless, FallbackEnv
 } from './maggie-tasks';
-import { localEnv } from '../env.local';
+import { getEnv } from '../env.local';
 
 const delay = (ms: number) => new Promise(res => setTimeout(res, ms));
 
@@ -130,10 +130,10 @@ class PostQueue {
 
 async function generateCaptionFromEmotion(emotion) {
   const emotionMap = {
-    soulful: "When your soul finally says yes 🌿✨",
-    funny: "POV: chaos is a lifestyle 🤪",
-    validating: "You’re not broken, you’re becoming. 🩵",
-    dry: "This is fine. Totally fine. 🔥"
+    soulful: "Soul check: vibes restored 🌿",
+    funny: "Maggie accidentally thriving 😂",
+    validating: "Universe says you're doing fine 🩵",
+    dry: "Mood: meh but posting anyway 😑",
   };
   return emotionMap[emotion] || "Let the universe hold this one.";
 }
@@ -144,6 +144,8 @@ async function generateCaptionFromEmotion(emotion) {
  */
 export class MaggieTikTokAutomation {
   private paused = false;
+  private status: 'active' | 'resting' = 'active';
+  private healing = false;
   private queue: PostQueue;
 
   constructor(private env: TikTokAutomationEnv) {
@@ -179,96 +181,84 @@ export class MaggieTikTokAutomation {
     console.log(`📅 Scheduling video: ${next.filename}`);
 
     next.retries = next.retries || 0;
-    if (!next.caption && next.emotion) {
+    if (next.filename.includes('_nocap')) {
+      next.caption = '';
+    } else if (!next.caption && next.emotion) {
       next.caption = await generateCaptionFromEmotion(next.emotion);
     }
 
     const attempt = next.retries;
+    let browser: any;
+    let page: any;
 
-    const upload = async (): Promise<boolean> => {
-      let browser;
-      let page;
-      // Puppeteer launch
-      try {
-        browser = await puppeteer.connect({ browserWSEndpoint: this.env.BROWSERLESS_URL });
-        page = await browser.newPage();
-      } catch (err) {
-        console.error('Launch failed', err);
-        await this.queue.markFailed(next, attempt >= 2);
-        return false;
-      }
-
-      // File upload
-      try {
-        await page.goto('https://www.tiktok.com/upload');
-        await page.waitForSelector('input[type="file"]');
-        const fileInput = await page.$('input[type="file"]');
-        await fileInput.uploadFile(`/mnt/data/raw/${next.filename}`);
-      } catch (err) {
-        console.error('Upload failed', err);
-        await this.queue.markFailed(next, attempt >= 2);
-        await browser.close();
-        return false;
-      }
-
-      // Caption write
-      try {
-        await page.type('textarea[placeholder="Caption"]', next.caption || '');
-      } catch (err) {
-        console.error('Caption failed', err);
-        await this.queue.markFailed(next, attempt >= 2);
-        await browser.close();
-        return false;
-      }
-
-      // Toggle CapCut if needed
-      if (next.useCapCut) {
-        try {
-          await page.click('button[data-e2e="capcut"]');
-        } catch (err) {
-          console.error('CapCut toggle failed', err);
-          await this.queue.markFailed(next, attempt >= 2);
-          await browser.close();
-          return false;
+    const steps: { name: string; run: () => Promise<void> }[] = [
+      {
+        name: 'browser',
+        run: async () => {
+          browser = await puppeteer.connect({ browserWSEndpoint: this.env.BROWSERLESS_URL });
+          page = await browser.newPage();
         }
-      }
-
-      // Press Post
-      try {
-        await page.click('button:contains("Post")');
-      } catch (err) {
-        console.error('Post click failed', err);
-        await this.queue.markFailed(next, attempt >= 2);
-        await browser.close();
-        return false;
-      }
-
-      await this.queue.markPosted(next);
-      await page.close();
-      await browser.close();
-      return true;
-    };
-
-    const ok = await upload();
-    if (!ok) {
-      if (attempt < 2) {
-        next.retries = attempt + 1;
-        console.log(`Retrying ${next.filename} in 10 minutes`);
-        setTimeout(() => this.queue.enqueue(next), 10 * 60 * 1000);
-      } else {
-        await sendTelegram(this.env, `Upload failed for ${next.filename}`);
-        if (this.env.MAKE_FALLBACK_WEBHOOK) {
-          try {
-            await axios.post(this.env.MAKE_FALLBACK_WEBHOOK, { type: 'fail', video: next.filename });
-          } catch (err) {
-            console.error('Fallback webhook failed', err);
+      },
+      {
+        name: 'upload',
+        run: async () => {
+          await page.goto('https://www.tiktok.com/upload');
+          await page.waitForSelector('input[type="file"]');
+          const fileInput = await page.$('input[type="file"]');
+          await fileInput.uploadFile(`/mnt/data/raw/${next.filename}`);
+        }
+      },
+      {
+        name: 'caption',
+        run: async () => {
+          await page.type('textarea[placeholder="Caption"]', next.caption || '');
+          if (next.useCapCut) {
+            await page.click('button[data-e2e="capcut"]');
           }
         }
+      },
+      {
+        name: 'post',
+        run: async () => {
+          await page.click('button:contains("Post")');
+        }
+      }
+    ];
+
+    for (const step of steps) {
+      try {
+        await step.run();
+      } catch (err) {
+        console.error(`${step.name} failed`, err);
+        await this.queue.markFailed(next, attempt >= 3);
+        if (browser) await browser.close();
+        this.retryFailedPost(next);
+        return;
       }
     }
 
+    await this.queue.markPosted(next);
+    await page.close();
+    await browser.close();
+
     await delay(60 * 1000);
     await this.scheduleTikToks();
+  }
+
+  private retryFailedPost(item: QueueItem) {
+    const delays = [30_000, 90_000, 180_000];
+    const attempt = item.retries || 0;
+    if (attempt < delays.length) {
+      item.retries = attempt + 1;
+      const ms = delays[attempt];
+      console.log(`Retrying ${item.filename} in ${ms / 1000} seconds`);
+      setTimeout(() => this.queue.enqueue(item), ms);
+    } else {
+      sendTelegram(this.env, `flop_final ${item.filename}`);
+      if (this.env.MAKE_FALLBACK_WEBHOOK) {
+        axios.post(this.env.MAKE_FALLBACK_WEBHOOK, { type: 'flop_final', video: item.filename }).catch(err => console.error('Fallback webhook failed', err));
+      }
+    }
   }
 
   /**
@@ -285,7 +275,10 @@ export class MaggieTikTokAutomation {
    * Switch to Playwright/Puppeteer if Browserless usage exceeds 75%.
    */
   async autoSwitchRenderer(): Promise<void> {
-    await monitorBrowserless(this.env);
+    const usage = await monitorBrowserless(this.env);
+    if (usage < 0.75) {
+      await this.healMaggie();
+    }
   }
 
   private async retreatMode() {
@@ -293,27 +286,42 @@ export class MaggieTikTokAutomation {
     await sendTelegram(this.env, '📉 Retreat mode triggered');
   }
 
+  private async healMaggie() {
+    if (this.healing) return;
+    this.healing = true;
+    this.status = 'resting';
+    this.paused = true;
+    await sendTelegram(this.env, '😴 Maggie is resting');
+    setTimeout(async () => {
+      this.status = 'active';
+      this.paused = false;
+      this.healing = false;
+      await sendTelegram(this.env, '🌞 Maggie resumed');
+      await this.scheduleTikToks();
+    }, 60 * 60 * 1000);
+  }
+
   /**
    * Placeholder for other modules like trend insights or Telegram summaries.
    */
   async run(payload: Record<string, any>): Promise<{ ok: boolean }> {
     this.watchFolder();
-    await this.scheduleTikToks();
-    await this.detectAndRecoverFlops();
-    await this.autoSwitchRenderer();
+    this.scheduleTikToks();
+    this.detectAndRecoverFlops();
+    this.autoSwitchRenderer();
     return { ok: true };
   }
 }
 
 export async function runMaggieTikTokLoop(payload: Record<string, any>, env: TikTokAutomationEnv = {} as TikTokAutomationEnv) {
   const mergedEnv: TikTokAutomationEnv = {
-    TELEGRAM_BOT_TOKEN: env.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || localEnv.TELEGRAM_BOT_TOKEN,
-    TELEGRAM_CHAT_ID: env.TELEGRAM_CHAT_ID || process.env.TELEGRAM_CHAT_ID || localEnv.TELEGRAM_CHAT_ID,
-    SHEET_ID: env.SHEET_ID || process.env.SHEET_ID || localEnv.SHEET_ID,
-    DRIVE_FOLDER_ID: env.DRIVE_FOLDER_ID || process.env.DRIVE_FOLDER_ID || localEnv.DRIVE_FOLDER_ID,
-    DRIVE_FINAL_FOLDER_ID: env.DRIVE_FINAL_FOLDER_ID || process.env.DRIVE_FINAL_FOLDER_ID || localEnv.DRIVE_FINAL_FOLDER_ID,
-    BROWSERLESS_URL: env.BROWSERLESS_URL || process.env.BROWSERLESS_URL || localEnv.BROWSERLESS_URL,
-    MAKE_FALLBACK_WEBHOOK: env.MAKE_FALLBACK_WEBHOOK || process.env.MAKE_FALLBACK_WEBHOOK || localEnv.MAKE_FALLBACK_WEBHOOK,
+    TELEGRAM_BOT_TOKEN: await getEnv('TELEGRAM_BOT_TOKEN', env),
+    TELEGRAM_CHAT_ID: await getEnv('TELEGRAM_CHAT_ID', env),
+    SHEET_ID: await getEnv('SHEET_ID', env),
+    DRIVE_FOLDER_ID: await getEnv('DRIVE_FOLDER_ID', env),
+    DRIVE_FINAL_FOLDER_ID: await getEnv('DRIVE_FINAL_FOLDER_ID', env),
+    BROWSERLESS_URL: await getEnv('BROWSERLESS_URL', env),
+    MAKE_FALLBACK_WEBHOOK: await getEnv('MAKE_FALLBACK_WEBHOOK', env),
   };
   validateEnv(mergedEnv);
   const maggie = new MaggieTikTokAutomation(mergedEnv);

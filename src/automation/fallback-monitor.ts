@@ -9,10 +9,9 @@ export interface FallbackEnv {
 
 /**
  * monitorBrowserless checks API usage and switches to local Puppeteer if the
- * Browserless limit is reached. A Telegram notification is sent when the switch
- * occurs.
+ * Browserless limit is reached. Returns the usage ratio.
  */
-export async function monitorBrowserless(env: FallbackEnv) {
+export async function monitorBrowserless(env: FallbackEnv): Promise<number> {
   try {
     const url = `https://chrome.browserless.io/metrics?token=${env.BROWSERLESS_TOKEN}`;
     const { data } = await axios.get(url);
@@ -21,8 +20,10 @@ export async function monitorBrowserless(env: FallbackEnv) {
       // TODO: switch to local Puppeteer
       await notify(env, 'Renderer switched — all posts still scheduled.');
     }
+    return usage;
   } catch (err) {
     console.error('🔻Browserless fallback triggered', err);
+    return 1;
   }
 }
 
