@@ -1,40 +1,15 @@
-import fetch from 'node-fetch';
+import type { KVNamespace } from '@cloudflare/workers-types';
 
-export const localEnv: Record<string, string | undefined> = {
-  TELEGRAM_BOT_TOKEN: undefined,
-  TELEGRAM_CHAT_ID: undefined,
-  SHEET_ID: undefined,
-  DRIVE_FOLDER_ID: undefined,
-  DRIVE_FINAL_FOLDER_ID: undefined,
-  BROWSERLESS_URL: undefined,
-  MAKE_FALLBACK_WEBHOOK: undefined,
-  RETRY_DELAY_MS: undefined,
-  CAPCUT: undefined,
-};
-
-const cloudKV = {
-  async get(key: string): Promise<string | undefined> {
+export async function getEnv(key: string, env?: { POST_QUEUE?: KVNamespace }): Promise<string | undefined> {
+  const val = process.env[key];
+  if (val !== undefined) return val;
+  if (env?.POST_QUEUE) {
     try {
-      const account = process.env.CLOUDFLARE_ACCOUNT_ID;
-      const namespace = process.env.CLOUDFLARE_NAMESPACE_ID;
-      const token = process.env.CLOUDFLARE_API_TOKEN;
-      if (!account || !namespace || !token) return undefined;
-      const url = `https://api.cloudflare.com/client/v4/accounts/${account}/storage/kv/namespaces/${namespace}/values/${key}`;
-      const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return undefined;
-      return await res.text();
+      const v = await env.POST_QUEUE.get(key);
+      if (v !== null) return v;
     } catch {
-      return undefined;
+      // ignore and fall through
     }
-  },
-};
-
-export async function getEnv(key: string): Promise<string | undefined> {
-  return (
-    process.env[key] ||
-    localEnv[key] ||
-    (await cloudKV.get(key))
-  );
+  }
+  return undefined;
 }
