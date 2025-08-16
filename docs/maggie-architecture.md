@@ -14,6 +14,10 @@ This document outlines a modular Google Apps Script system for the Messy & Magne
 8. **Storage & Archiving** – prunes old raw videos and flops, archives blueprints after 90 days, warns if Drive usage exceeds 80%.
 9. **Subscriptions & Stripe** – handles daily/monthly updates, generates personalized PDFs, logs Stripe transactions, upsell reminders.
 10. **Donor & Grant Automation** – scans Gmail for grant keywords, stores contacts in Donor Tracker sheet and Notion (if enabled).
+11. **Soul Subscription Engine** – monitors active subscribers, crafts monthly soul forecasts, and delivers via email or Telegram.
+12. **Energy-Aware TikTok Planner** – matches Chanel's blueprint with current astrology and numerology to suggest daily clip vibes and hashtags.
+13. **Donor Cycle Tracker** – schedules gratitude notes, flags cold leads, and drafts follow-up emails.
+14. **Telegram Daily Energy Ping** – 6AM message with vibe check, suggested post type, and color/food alignment.
 
 ## Script Properties
 Use `PropertiesService.getScriptProperties()` to store API keys and IDs:
@@ -31,7 +35,7 @@ Use `PropertiesService.getScriptProperties()` to store API keys and IDs:
 
 - **onFormSubmit** – `onSoulBlueprintSubmit`
 - **Drive** – `onRawTikTokUpload`
-- **Time-driven** – daily `dailyUsedContentCheck`, `boosterDaily`, `formatSheets`, `pruneStorage`, `morningSummary`, `eveningSummary`
+- **Time-driven** – daily `dailyUsedContentCheck`, `boosterDaily`, `formatSheets`, `pruneStorage`, `morningSummary`, `eveningSummary`, `dailyEnergyPing`; monthly `monthlyForecasts`
 - **Hourly** – `checkMailboxes`, `donorAutomation`, `processSubscriptions`
 
 ## External Services
